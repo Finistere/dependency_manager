@@ -1,4 +1,5 @@
 import enum
+from typing import overload, TypeVar, Union
 
 from .debug import debug_repr, short_id
 from .immutable import FinalImmutable, Immutable
@@ -6,10 +7,19 @@ from .meta import AbstractMeta, FinalMeta
 from .slots import SlotRecord
 from .. import API
 
+Im = TypeVar('Im', bound=Immutable)
+
 
 @API.private
 class Copy(enum.Enum):
     IDENTICAL = object()
+
+    @staticmethod
+    def immutable(current: Im, **kwargs: object) -> Im:
+        return type(current)(**{
+            attr: getattr(current, attr) if value is Copy.IDENTICAL else value
+            for attr, value in kwargs.items()
+        })
 
 
 @API.private

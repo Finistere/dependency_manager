@@ -79,8 +79,7 @@ class Service(metaclass=ServiceMeta, abstract=True):
         def __init__(self,
                      *,
                      wiring: Optional[Union[Wiring, AutoWire]] =
-                     Wiring(methods=['__init__'],
-                            ignore_missing_method=['__init__']),
+                     Wiring(attempt_methods=['__init__']),
                      singleton: bool = True,
                      tags: Optional[Iterable[Tag]] = None):
             """
@@ -119,11 +118,7 @@ class Service(metaclass=ServiceMeta, abstract=True):
             Copies current configuration and overrides only specified arguments.
             Accepts the same arguments as :py:meth:`.__init__`
             """
-            return Service.Conf(
-                wiring=self.wiring if wiring is Copy.IDENTICAL else wiring,
-                singleton=self.singleton if singleton is Copy.IDENTICAL else singleton,
-                tags=self.tags if tags is Copy.IDENTICAL else tags
-            )
+            return Copy.immutable(self, wiring=wiring, singleton=singleton, tags=tags)
 
     __antidote__: Conf = Conf()
     """

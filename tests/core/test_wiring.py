@@ -1,6 +1,7 @@
 import pytest
 
-from antidote import world
+from antidote import inject, world
+from antidote.core.exceptions import DoubleInjectionError
 from antidote.core.wiring import Wiring, WithWiringMixin
 
 
@@ -20,10 +21,20 @@ def new_world():
 
 
 @pytest.mark.parametrize('kwargs, expectation', [
+    (dict(), pytest.raises(TypeError)),
     (dict(methods=[]), pytest.raises(ValueError, match=".*method.*")),
-    (dict(methods=[1]), pytest.raises(ValueError, match="(?i).*method.*")),
-    (dict(), pytest.raises(TypeError, match=".*.*")),
+    (dict(attempt_methods=[]),
+     pytest.raises(ValueError, match=".*attempt_methods.*")),
+    (dict(methods=[], attempt_methods=[]),
+     pytest.raises(ValueError, match=".*methods.*attempt_methods.*")),
+
     (dict(methods=1), pytest.raises(TypeError, match=".*method.*")),
+    (dict(attempt_methods=1),
+     pytest.raises(TypeError, match=".*attempt_methods.*")),
+    (dict(methods=[1]), pytest.raises(ValueError, match="(?i).*method.*")),
+    (dict(attempt_methods=[1]),
+     pytest.raises(ValueError, match=".*attempt_methods.*")),
+
     (dict(methods=['f'], dependencies=1),
      pytest.raises(TypeError, match=".*dependencies.*")),
     (dict(methods=['f'], use_names=1), pytest.raises(TypeError, match=".*use_names.*")),
@@ -32,40 +43,29 @@ def new_world():
     (dict(methods=['f'], wire_super=1), pytest.raises(TypeError, match=".*wire_super.*")),
     (dict(methods=['f'], wire_super=['x']),
      pytest.raises(ValueError, match=".*wire_super.*")),
-    (dict(methods=['f'], ignore_missing_method=1),
-     pytest.raises(TypeError, match=".*ignore_missing_method.*")),
-    (dict(methods=['f'], ignore_missing_method=['x']),
-     pytest.raises(ValueError, match=".*ignore_missing_method.*"))
+    (dict(attempt_methods=['f'], wire_super=['x']),
+     pytest.raises(ValueError, match=".*wire_super.*"))
 ])
 def test_validation(kwargs, expectation):
     with expectation:
         Wiring(**kwargs)
 
 
-@pytest.mark.parametrize('kwargs, expected', [
-    (dict(methods=['f']), dict()),
-    (dict(methods=iter(['f', 'x'])), dict(methods={'f', 'x'})),
-    (dict(methods=['f'], use_names=iter(['x'])), dict(use_names={'x'})),
-    (dict(methods=['f'], use_type_hints=iter(['x'])), dict(use_type_hints={'x'})),
-    (dict(methods=['f'], wire_super=iter(['f'])), dict(wire_super={'f'})),
-    (dict(methods=['f'], wire_super=True), dict(wire_super={'f'})),
-    (dict(methods=['f'], wire_super=False), dict(wire_super=set())),
-    (dict(methods=['f'], ignore_missing_method=True),
-     dict(ignore_missing_method={'f'})),
-    (dict(methods=['f'], ignore_missing_method=False),
-     dict(ignore_missing_method=set())),
-    (dict(methods=['f'], ignore_missing_method=iter(['f'])),
-     dict(ignore_missing_method={'f'})),
-])
-def test_init(kwargs, expected):
-    result = Wiring(**kwargs)
-    expected_methods = expected.get('methods', {'f'})
-    assert result.methods == expected_methods
-    assert result.wire_super == expected.get('wire_super', set())
-    assert result.ignore_missing_method == expected.get('ignore_missing_method', set())
-    assert result.dependencies == expected.get('dependencies')
-    assert result.use_names == expected.get('use_names')
-    assert result.use_type_hints == expected.get('use_type_hints')
+def test_init():
+    w = Wiring(methods=iter(['method']), attempt_methods=iter(['attempt']),
+               wire_super=iter(['method']), use_names=iter(['method']),
+               use_type_hints=iter(['method']))
+
+    assert isinstance(w.methods, frozenset)
+    assert w.methods == {'method'}
+    assert isinstance(w.attempt_methods, frozenset)
+    assert w.attempt_methods == {'attempt'}
+    assert isinstance(w.wire_super, frozenset)
+    assert w.wire_super == {'method'}
+    assert isinstance(w.use_names, frozenset)
+    assert w.use_names == {'method'}
+    assert isinstance(w.use_type_hints, frozenset)
+    assert w.use_type_hints == {'method'}
 
 
 def test_wiring_methods():
@@ -82,6 +82,22 @@ def test_wiring_methods():
     assert A().f() is world.get(Dummy)
     with pytest.raises(TypeError):
         A().g()
+
+    with pytest.raises(AttributeError):
+        wiring = Wiring(methods=['f'])
+
+        @wiring.wire
+        class A:
+            pass
+
+    with pytest.raises(DoubleInjectionError):
+        wiring = Wiring(methods=['f'])
+
+        @wiring.wire
+        class A:
+            @inject
+            def f(self, x: Dummy):
+                return x
 
 
 def test_wiring_super_methods():
@@ -103,13 +119,29 @@ def test_wiring_super_methods():
         class Y(A):
             pass
 
-    c_wiring = Wiring(methods=['f'], wire_super=True)
+    b_wiring = Wiring(methods=['f'], wire_super=True)
+
+    @b_wiring.wire
+    class B(A):
+        pass
+
+    assert B().f() is world.get(Dummy)
+
+    c_wiring = Wiring(methods=['f'], wire_super=['f'])
 
     @c_wiring.wire
     class C(A):
         pass
 
     assert C().f() is world.get(Dummy)
+
+    d_wiring = Wiring(attempt_methods=['f'], wire_super=['f'])
+
+    @d_wiring.wire
+    class D(A):
+        pass
+
+    assert D().f() is world.get(Dummy)
 
 
 def test_wiring_dependencies():
@@ -286,7 +318,7 @@ def test_wiring_static_class_method():
     assert C().klass() == (C, world.get(Dummy))
 
 
-def test_ignore_missing_method():
+def test_attempt_methods():
     with pytest.raises(AttributeError, match=".*unknown_method.*"):
         wiring = Wiring(methods=['unknown_method'])
 
@@ -294,21 +326,13 @@ def test_ignore_missing_method():
         class X:
             pass
 
-    with pytest.raises(AttributeError, match=".*unknown_method.*"):
-        wiring = Wiring(methods=['unknown_method'], ignore_missing_method=False)
-
-        @wiring.wire
-        class Y:
-            pass
-
-    a_wiring = Wiring(methods=['unknown_method'], ignore_missing_method=True)
+    a_wiring = Wiring(attempt_methods=['unknown_method'])
 
     @a_wiring.wire
     class A:
         pass
 
-    b_wiring = Wiring(methods=['method', 'maybe_method'],
-                      ignore_missing_method=['maybe_method'])
+    b_wiring = Wiring(methods=['method'], attempt_methods=['maybe_method'])
 
     @b_wiring.wire
     class B:
@@ -317,9 +341,26 @@ def test_ignore_missing_method():
 
     with pytest.raises(AttributeError, match=".*method.*"):
         @b_wiring.wire
-        class C:
+        class B2:
             def maybe_method(self):
                 pass
+
+    c_wiring = Wiring(attempt_methods=['method'])
+
+    @c_wiring.wire
+    class C:
+        def method(self, d: Dummy):
+            return d
+
+    assert C().method() is world.get[Dummy]()
+
+    @c_wiring.wire
+    class C2:
+        @inject  # shouldn't fail
+        def method(self, d: Dummy):
+            return d
+
+    assert C().method() is world.get[Dummy]()
 
 
 def test_unwrap_class_static_methods():
@@ -342,19 +383,19 @@ def test_unwrap_class_static_methods():
 
 @pytest.mark.parametrize('kwargs', [
     dict(methods={'method', 'test'}),
+    dict(attempt_methods={'attempt_method', 'test'}),
     dict(dependencies="{arg_name}"),
     dict(use_names=True),
     dict(use_type_hints=True),
-    dict(wire_super={'method'}),
-    dict(ignore_missing_method={'method'})
+    dict(wire_super={'method'})
 ])
 def test_copy(kwargs):
     wiring = Wiring(methods=['method'],
+                    attempt_methods=['attempt_method'],
                     dependencies=dict(),
                     use_names=False,
                     use_type_hints=False,
-                    wire_super=False,
-                    ignore_missing_method=False)
+                    wire_super=False)
     copy = wiring.copy(**kwargs)
     for key, value in kwargs.items():
         assert getattr(copy, key) == value
@@ -370,19 +411,19 @@ class DummyConf(WithWiringMixin):
 
 @pytest.mark.parametrize('kwargs', [
     dict(methods={'method', 'test'}),
+    dict(attempt_methods={'attempt_method', 'test'}),
     dict(dependencies="{arg_name}"),
     dict(use_names=True),
     dict(use_type_hints=True),
-    dict(wire_super={'method'}),
-    dict(ignore_missing_method={'method'})
+    dict(wire_super={'method'})
 ])
 def test_with_wiring(kwargs):
     conf = DummyConf(Wiring(methods=['method'],
+                            attempt_methods=['attempt_method'],
                             dependencies=dict(),
                             use_names=False,
                             use_type_hints=False,
-                            wire_super=False,
-                            ignore_missing_method=False))
+                            wire_super=False))
     copy = conf.with_wiring(**kwargs)
     for key, value in kwargs.items():
         assert getattr(copy.wiring, key) == value

@@ -63,9 +63,7 @@ class Constants(metaclass=ConstantsMeta, abstract=True):
                      *,
                      public: bool = False,
                      auto_cast: Union[Iterable[type], bool] = True,
-                     wiring: Optional[Wiring] = Wiring(methods=['__init__'],
-                                                       ignore_missing_method=[
-                                                           '__init__'])):
+                     wiring: Optional[Wiring] = Wiring(attempt_methods=['__init__'])):
             """
             Args:
                 public: Whether the Constants instance is available through Antidote like
@@ -107,12 +105,7 @@ class Constants(metaclass=ConstantsMeta, abstract=True):
                  wiring: Union[Optional[Wiring], Copy] = Copy.IDENTICAL,
                  auto_cast: Union[Union[Sequence[type], bool], Copy] = Copy.IDENTICAL
                  ) -> 'Constants.Conf':
-
-            return Constants.Conf(
-                public=self.public if public is Copy.IDENTICAL else public,
-                wiring=self.wiring if wiring is Copy.IDENTICAL else wiring,
-                auto_cast=self.auto_cast if auto_cast is Copy.IDENTICAL else auto_cast
-            )
+            return Copy.immutable(self, public=public, wiring=wiring, auto_cast=auto_cast)
 
     __antidote__: Conf = Conf()
 

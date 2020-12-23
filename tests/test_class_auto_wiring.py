@@ -166,23 +166,19 @@ def test_method_wiring(class_builder: F):
     assert b is world.get(B)
 
 
-def test_ignore_missing_method(class_builder: F):
+def test_attempt_methods(class_builder: F):
     with pytest.raises(AttributeError, match=".*unknown.*"):
         class_builder(Wiring(methods=('unknown',)))()
 
     with pytest.raises(AttributeError, match=".*unknown.*"):
-        class_builder(Wiring(methods=('unknown',), ignore_missing_method=False))()
-
-    with pytest.raises(AttributeError, match=".*unknown.*"):
-        class_builder(Wiring(methods=['unknown', 'method'],
-                             ignore_missing_method=['method']))()
+        class_builder(Wiring(methods=['unknown'],
+                             attempt_methods=['method']))()
 
     with world.test.clone(keep_singletons=True):
-        class_builder(Wiring(methods=('unknown',),
-                             ignore_missing_method=['unknown']))()
+        class_builder(Wiring(attempt_methods=['unknown']))()
 
     with world.test.clone(keep_singletons=True):
-        dummy = class_builder(Wiring(methods=('unknown',), ignore_missing_method=True))()
+        dummy = class_builder(Wiring(attempt_methods=('unknown',)))()
         assert dummy.a is None
         assert dummy.b is None
 
@@ -191,8 +187,7 @@ def test_ignore_missing_method(class_builder: F):
         assert b is None
 
     with world.test.clone(keep_singletons=True):
-        dummy = class_builder(Wiring(methods=('method',),
-                                     ignore_missing_method=['method']))()
+        dummy = class_builder(Wiring(attempt_methods=('method',)))()
         assert dummy.a is None
         assert dummy.b is None
 
@@ -207,8 +202,7 @@ def test_super_wiring(subclass_builder: F):
         subclass_builder(Wiring(methods=('method',)))()
 
     with world.test.clone(keep_singletons=True):
-        sub_dummy = subclass_builder(Wiring(methods=('method',),
-                                            ignore_missing_method=True))()
+        sub_dummy = subclass_builder(Wiring(attempt_methods=('method',)))()
         assert sub_dummy.a is None
         assert sub_dummy.b is None
 
@@ -217,8 +211,7 @@ def test_super_wiring(subclass_builder: F):
         assert b is None
 
     with world.test.clone(keep_singletons=True):
-        sub_dummy = subclass_builder(Wiring(methods=('method',),
-                                            ignore_missing_method=True,
+        sub_dummy = subclass_builder(Wiring(attempt_methods=('method',),
                                             wire_super=False))()
         assert sub_dummy.a is None
         assert sub_dummy.b is None
@@ -248,9 +241,8 @@ def test_super_wiring(subclass_builder: F):
         assert b is world.get(B)
 
     with world.test.clone(keep_singletons=True):
-        sub_dummy = subclass_builder(Wiring(methods=('method', '__init__'),
-                                            wire_super=('__init__',),
-                                            ignore_missing_method=True))()
+        sub_dummy = subclass_builder(Wiring(attempt_methods=('method', '__init__'),
+                                            wire_super=('__init__',)))()
         assert sub_dummy.a is world.get(A)
         assert sub_dummy.b is world.get(B)
 
@@ -259,9 +251,8 @@ def test_super_wiring(subclass_builder: F):
         assert b is None
 
     with world.test.clone(keep_singletons=True):
-        sub_dummy = subclass_builder(Wiring(methods=('method', '__init__'),
-                                            wire_super=('method',),
-                                            ignore_missing_method=True))()
+        sub_dummy = subclass_builder(Wiring(attempt_methods=('method', '__init__'),
+                                            wire_super=('method',)))()
         assert sub_dummy.a is None
         assert sub_dummy.b is None
 

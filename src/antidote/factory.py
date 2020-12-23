@@ -124,8 +124,8 @@ class Factory(metaclass=FactoryMeta, abstract=True):
         def __init__(self,
                      *,
                      wiring: Optional[Wiring] = Wiring(
-                         methods=['__call__', '__init__'],
-                         ignore_missing_method=['__init__']
+                         methods=['__call__'],
+                         attempt_methods=['__init__']
                      ),
                      singleton: bool = True,
                      tags: Optional[Iterable[Tag]] = None,
@@ -173,12 +173,11 @@ class Factory(metaclass=FactoryMeta, abstract=True):
             Copies current configuration and overrides only specified arguments.
             Accepts the same arguments as :py:meth:`.__init__`
             """
-            return Factory.Conf(
-                wiring=self.wiring if wiring is Copy.IDENTICAL else wiring,
-                singleton=self.singleton if singleton is Copy.IDENTICAL else singleton,
-                tags=self.tags if tags is Copy.IDENTICAL else tags,
-                public=self.public if public is Copy.IDENTICAL else public,
-            )
+            return Copy.immutable(self,
+                                  wiring=wiring,
+                                  singleton=singleton,
+                                  tags=tags,
+                                  public=public)
 
     __antidote__: Conf = Conf()
     """

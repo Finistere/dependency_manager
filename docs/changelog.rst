@@ -9,6 +9,26 @@ Overall satisfied with the API, will take some time (weeks) to see what examples
 missing or what could be removed/simplified before making a v1.0.
 
 
+
+0.10.0 (2020-12-24)
+===================
+
+
+Breaking change
+---------------
+
+- In :py:class:`.Wiring`, :code:`ignore_missing_methods` has been replaced by
+  :code:`attempt_methods`.
+
+
+Bug fix
+-------
+
+- Using :py:meth:`.inject` on :code:`__init__()` of a :py:class:`.Service`, or any methods
+  injected by default by Antidote, will not raise a double injection error anymore.
+
+
+
 0.9.0 (2020-12-23)
 ==================
 

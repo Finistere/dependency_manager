@@ -4,6 +4,7 @@ import inspect
 from typing import Callable, cast, FrozenSet, Iterable, Optional, overload, TypeVar, Union
 
 from ._injection import raw_inject
+from .exceptions import DoubleInjectionError
 from .injection import DEPENDENCIES_TYPE, validate_injection
 from .._compatibility.typing import final
 from .._internal import API
@@ -21,7 +22,12 @@ class Wiring(FinalImmutable):
     """
     Defines how a class should be wired, meaning if/how/which methods are injected. This
     class is intended to be used by configuration objects. If you just want to wire a
-    single class, consider using the class decorator :py:func:`~.wire` instead.
+    single class, consider using the class decorator :py:func:`~.wire` instead. There are
+    two purposes:
+
+    - providing a default injection which can be overridden either by changing the wiring
+      or using `@inject` when using :code:`attempt_methods`.
+    - wiring of multiple methods with similar dependencies.
 
     Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`use_type_hints`)
     are adapted for match the arguments of the method. Hence :py:func:`~.injection.inject`
@@ -40,16 +46,12 @@ class Wiring(FinalImmutable):
         ... w_copy = w.copy(use_names=True)
 
     """
-    __slots__ = ('methods', 'dependencies', 'use_names', 'use_type_hints', 'wire_super',
-                 'ignore_missing_method')
+    __slots__ = ('methods', 'attempt_methods', 'dependencies', 'use_names',
+                 'use_type_hints', 'wire_super')
     methods: FrozenSet[str]
+    attempt_methods: FrozenSet[str]
     """Method names that must be injected."""
-    wire_super: FrozenSet[str]
-    """
-    Method names which may be retrieved in a parent class. By default, only methods
-    directly defined in the class itself may be injected.
-    """
-    ignore_missing_method: FrozenSet[str]
+    wire_super: Union[bool, FrozenSet[str]]
     """Method names for which an exception will not be raised if not found."""
     dependencies: DEPENDENCIES_TYPE
     use_names: Union[bool, FrozenSet[str]]
@@ -57,15 +59,17 @@ class Wiring(FinalImmutable):
 
     def __init__(self,
                  *,
-                 methods: Iterable[str],
+                 methods: Iterable[str] = None,
+                 attempt_methods: Iterable[str] = None,
                  dependencies: DEPENDENCIES_TYPE = None,
                  use_names: Union[bool, Iterable[str]] = None,
                  use_type_hints: Union[bool, Iterable[str]] = None,
-                 wire_super: Union[bool, Iterable[str]] = None,
-                 ignore_missing_method: Union[bool, Iterable[str]] = None):
+                 wire_super: Union[bool, Iterable[str]] = None) -> None:
         """
         Args:
-            methods: Methods names.
+            methods: Names of methods that must be injected.
+            attempt_methods: Names of methods that will be injected if present and if not
+                already injected.
             dependencies: Propagated for every method to :py:func:`~.injection.inject`
             use_names: Propagated for every method to :py:func:`~.injection.inject`
             use_type_hints: Propagated for every method to :py:func:`~.injection.inject`
@@ -73,19 +77,35 @@ class Wiring(FinalImmutable):
                 only methods  directly defined in the class itself may be injected. If
                 :py:obj:`True` all methods will be searched in parent classes. Defaults to
                 :py:obj:`False`.
-            ignore_missing_method:  Method names for which an exception will not be
-                raised if not found. If :py:obj:`True`, no exception will be raised if
-                any of the methods is missing. Defaults to :py:obj:`False`.
         """
-        if not isinstance(methods, c_abc.Iterable) or isinstance(methods, str):
-            raise TypeError(f"Methods must be an iterable of method names, "
+        if attempt_methods is None and methods is None:
+            raise TypeError("Either methods or attempt_methods must be specified.")
+
+        if attempt_methods is None:
+            attempt_methods = frozenset()
+        elif not isinstance(attempt_methods, c_abc.Iterable) \
+                or isinstance(attempt_methods, str):
+            raise TypeError(f"attempt_methods must be an iterable of method names, "
+                            f"not {type(attempt_methods)}.")
+        else:
+            attempt_methods = frozenset(attempt_methods)
+        if not all(isinstance(method, str) for method in attempt_methods):
+            raise ValueError("attempt_methods is expected to contain methods names (str)")
+
+        if methods is None:
+            methods = frozenset()
+        elif not isinstance(methods, c_abc.Iterable) or isinstance(methods, str):
+            raise TypeError(f"methods must be an iterable of method names, "
                             f"not {type(methods)}.")
         else:
             methods = frozenset(methods)
-        if len(methods) == 0:
-            raise ValueError("At least one method must be wired")
         if not all(isinstance(method, str) for method in methods):
-            raise ValueError("Methods are expected to be names (str)")
+            raise ValueError("methods is expected to contain methods names (str)")
+
+        if not methods and not attempt_methods:
+            raise ValueError("Either methods or attempt_methods must contain at least "
+                             "one method name.")
+        attempt_methods -= methods
 
         if not isinstance(use_names, str) and isinstance(use_names, c_abc.Iterable):
             use_names = frozenset(use_names)
@@ -102,66 +122,42 @@ class Wiring(FinalImmutable):
             wire_super = bool(wire_super)
         else:
             wire_super = frozenset(wire_super)
-            if not wire_super.issubset(methods):
-                raise ValueError(f"wire_super is not a subset of methods. "
-                                 f"Method names {wire_super - methods!r} are unknown.")
-
-        if isinstance(ignore_missing_method, str) \
-            or not (ignore_missing_method is None
-                    or isinstance(ignore_missing_method, (bool, c_abc.Iterable))):
-            raise TypeError(f"ignore_missing_method must be a boolean or a list of "
-                            f"methods names for which an exception must be raised if "
-                            f"it's missing, not {type(ignore_missing_method)}")
-        if ignore_missing_method is None or isinstance(ignore_missing_method, bool):
-            ignore_missing_method = bool(ignore_missing_method)
-        else:
-            ignore_missing_method = frozenset(ignore_missing_method)
-            if not ignore_missing_method.issubset(methods):
-                unexpected = ignore_missing_method - methods
-                raise ValueError(f"ignore_missing_method is not a subset of methods. "
-                                 f"Method names {', '.join(map(repr, unexpected))} "
-                                 f"are unknown.")
-
-        if isinstance(wire_super, bool):
-            wire_super = methods if wire_super else _empty_set
-        if isinstance(ignore_missing_method, bool):
-            ignore_missing_method = methods if ignore_missing_method else _empty_set
+            if not wire_super.issubset(methods | attempt_methods):
+                all_methods = methods | attempt_methods
+                raise ValueError(f"wire_super is not a subset of methods. Method "
+                                 f"names {wire_super - all_methods!r} are unknown.")
 
         super().__init__(methods=methods,
+                         attempt_methods=attempt_methods,
                          wire_super=wire_super,
                          dependencies=dependencies,
                          use_names=use_names,
-                         use_type_hints=use_type_hints,
-                         ignore_missing_method=ignore_missing_method)
+                         use_type_hints=use_type_hints)
 
     def copy(self,
              *,
              methods: Union[Iterable[str], Copy] = Copy.IDENTICAL,
+             attempt_methods: Union[Iterable[str], Copy] = Copy.IDENTICAL,
              dependencies: Union[DEPENDENCIES_TYPE, Copy] = Copy.IDENTICAL,
              use_names: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
              use_type_hints: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-             wire_super: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-             ignore_missing_method: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL
+             wire_super: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL
              ) -> 'Wiring':
         """
+        All arguments are passed to :py:meth:`.__init__` if specified. If not the current
+        ones are used.
+
         Returns:
             Wiring: copy of the current object with the specified attributes overriding
             existing ones.
         """
-        return Wiring(
-            methods=self.methods if methods is Copy.IDENTICAL else methods,
-            dependencies=(self.dependencies
-                          if dependencies is Copy.IDENTICAL else
-                          dependencies),
-            use_names=self.use_names if use_names is Copy.IDENTICAL else use_names,
-            use_type_hints=(self.use_type_hints
-                            if use_type_hints is Copy.IDENTICAL else
-                            use_type_hints),
-            wire_super=self.wire_super if wire_super is Copy.IDENTICAL else wire_super,
-            ignore_missing_method=(self.ignore_missing_method
-                                   if ignore_missing_method is Copy.IDENTICAL else
-                                   ignore_missing_method)
-        )
+        return Copy.immutable(self,
+                              methods=methods,
+                              attempt_methods=attempt_methods,
+                              wire_super=wire_super,
+                              dependencies=dependencies,
+                              use_names=use_names,
+                              use_type_hints=use_type_hints)
 
     @API.experimental
     def wire(self, klass: C) -> C:
@@ -207,7 +203,9 @@ def wire(klass: C = None,
          use_names: Union[bool, Iterable[str]] = None,
          use_type_hints: Union[bool, Iterable[str]] = None,
          wire_super: Union[bool, Iterable[str]] = None) -> Union[C, Callable[[C], C]]:
-    """Wire a class by injecting specified methods.
+    """
+    Wire a class by injecting specified methods. This avoids repetition if similar
+    dependencies need to be injected in different methods.
 
     Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`use_type_hints`)
     are adapted for match the arguments of the method. Hence :py:func:`~.injection.inject`
@@ -215,7 +213,7 @@ def wire(klass: C = None,
 
     Args:
         klass: Class to wire.
-        methods: Method names that must be injected.
+        methods: Names of methods that must be injected.
         dependencies: Propagated for every method to :py:func:`~.injection.inject`.
         use_names: Propagated for every method to :py:func:`~.injection.inject`.
         use_type_hints: Propagated for every method to :py:func:`~.injection.inject`.
@@ -262,12 +260,11 @@ class WithWiringMixin:
     def with_wiring(self: W,
                     *,
                     methods: Union[Iterable[str], Copy] = Copy.IDENTICAL,
+                    attempt_methods: Union[Iterable[str], Copy] = Copy.IDENTICAL,
                     dependencies: Union[DEPENDENCIES_TYPE, Copy] = Copy.IDENTICAL,
                     use_names: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
                     use_type_hints: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-                    wire_super: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-                    ignore_missing_method: Union[
-                        bool, Iterable[str], Copy] = Copy.IDENTICAL
+                    wire_super: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL
                     ) -> W:
         """
         Accepts the same arguments as :py:class:`~.Wiring`. And behaves the same way
@@ -278,23 +275,27 @@ class WithWiringMixin:
             provided arguments.
         """
         if self.wiring is None:
-            if methods is Copy.IDENTICAL:
-                raise TypeError("Current wiring is None, so methods must be specified")
-            wiring = Wiring(methods=methods)
+            if methods is Copy.IDENTICAL and attempt_methods is Copy.IDENTICAL:
+                raise TypeError("Current wiring is None, so either methods or"
+                                "attempt_methods must be specified")
+            wiring = Wiring(
+                methods=[] if methods is Copy.IDENTICAL else methods,
+                attempt_methods=([]
+                                 if attempt_methods is Copy.IDENTICAL else
+                                 attempt_methods))
             return self.copy(wiring=wiring.copy(
                 dependencies=dependencies,
                 use_names=use_names,
                 use_type_hints=use_type_hints,
-                wire_super=wire_super,
-                ignore_missing_method=ignore_missing_method))
+                wire_super=wire_super))
         else:
             return self.copy(wiring=self.wiring.copy(
                 methods=methods,
+                attempt_methods=attempt_methods,
                 dependencies=dependencies,
                 use_names=use_names,
                 use_type_hints=use_type_hints,
-                wire_super=wire_super,
-                ignore_missing_method=ignore_missing_method))
+                wire_super=wire_super))
 
 
 @API.private  # Used internally for auto wiring.
@@ -307,17 +308,24 @@ def _wire_class(cls: C, wiring: Wiring) -> C:
     if not inspect.isclass(cls):
         raise TypeError(f"Expecting a class, got a {type(cls)}")
 
-    for method_name in wiring.methods:
+    if isinstance(wiring.wire_super, bool):
+        if wiring.wire_super:
+            wire_super_set = wiring.methods | wiring.attempt_methods
+        else:
+            wire_super_set = frozenset()
+    else:
+        wire_super_set = wiring.wire_super
+
+    for method_name in (wiring.methods | wiring.attempt_methods):
         try:
             attr = raw_getattr(cls,
                                method_name,
-                               with_super=method_name in wiring.wire_super)
+                               with_super=method_name in wire_super_set)
         except AttributeError:
-            if method_name not in wiring.ignore_missing_method:
+            if method_name in wiring.methods:
                 raise
         else:
-
-            if not (inspect.isfunction(attr)
+            if not (callable(attr)
                     or isinstance(attr, (staticmethod, classmethod))):
                 raise TypeError(f"{method_name} is neither a method,"
                                 f" nor a static/class method. Found: {type(attr)}")
@@ -345,15 +353,19 @@ def _wire_class(cls: C, wiring: Wiring) -> C:
             if use_type_hints is not None and not isinstance(use_type_hints, bool):
                 use_type_hints = use_type_hints.intersection(arguments.arg_names)
 
-            injected_method = raw_inject(
-                method,
-                arguments=arguments,
-                dependencies=dependencies,
-                use_names=use_names,
-                use_type_hints=use_type_hints
-            )
-
-            if injected_method is not method:  # If something has changed
-                setattr(cls, method_name, injected_method)
+            try:
+                injected_method = raw_inject(
+                    method,
+                    arguments=arguments,
+                    dependencies=dependencies,
+                    use_names=use_names,
+                    use_type_hints=use_type_hints
+                )
+            except DoubleInjectionError:
+                if method_name in wiring.methods:
+                    raise
+            else:
+                if injected_method is not method:  # If something has changed
+                    setattr(cls, method_name, injected_method)
 
     return cls

@@ -74,38 +74,27 @@ How does injection looks like ? Here is a simple example:
 
 .. code-block:: python
 
-    from antidote import inject, Service, Constants, const
+    from antidote import inject, Service, Constants, const, world
 
     class Conf(Constants):
-        # A constant is defined by const. When needed, the associated value will
-        # be passed on to get() to retrieve, only once, lazily the real value.
         DB_HOST = const[str]('host')
-        # The type is not required, but it provides Mypy the necessary information
-        # on the real dependency value, once retrieved through get().
         DB_HOST_UNTYPED = const('host')
 
         def __init__(self):
             self._data = {'host': 'localhost:6789'}
 
-        def get(self, key):
+        # Used to retrieve lazily the const, so injecting Conf.DB_HOST is equivalent
+        # Conf().get('host')
+        def get(self, key: str):
             return self._data[key]
 
-    # Declare Database as a dependency that can be injected
     class Database(Service):
-        # Antidotes configuration for this Service. By default `__init__()` is wired (injected).
-        #
-        __antidote__ = Service.Conf().with_wiring(
-            # Specifying that arguments named 'host' should be injected with the
-            # dependency Conf.DB_HOST.
-            dependencies=dict(host=Conf.DB_HOST))
-
-        # You could have wired yourself `__init__()` by applying:
-        # @inject(dependencies=dict(host=Conf.DB_HOST))
+        @inject(dependencies=dict(host=Conf.DB_HOST))
         def __init__(self, host: str):
+            # Here host = Conf().get('host')
             self._host = host
 
-    # Inject dependencies in f(), by default only type annotations are used. But
-    # arguments name, explicit mapping, etc.. can also be used.
+    # By default only type annotations are used.
     @inject
     def f(db: Database = None):
         # Defaulting to None allows for MyPy compatibility but isn't required to work.
@@ -115,10 +104,24 @@ How does injection looks like ? Here is a simple example:
     f()  # Service will be automatically injected if not provided
     f(Database('localhost:6789'))  # but you can still use the function normally
 
+    # You can also retrieve dependencies by hand
+    world.get(Conf.DB_HOST)
+    # with type hint
+    world.get[str](Conf.DB_HOST)
+    # if the dependency is the type itself, you may omit it:
+    world.get[Database]()
+
+    # If you need to handle multiple different host for some reason you can
+    # specify them in the dependency itself. As Database returns a singleton,
+    # by default, this will also be the case here. Using the same host, will
+    # return the same instance.
+    world.get[Database](Database.with_kwargs(host='XX'))
+
 
 Want more ? Here is an over-engineered example to showcase a lot more features:
 
 .. code-block:: python
+
 
     """
     Simple example where a MovieDB interface is defined which can be used
@@ -139,8 +142,8 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         def __init__(self, *args, **kwargs):
             pass
 
-    # Defining a singleton. Can only be overridden in tests.
-    world.singletons.add('conf_path', '/some/file')
+    # Defining a singleton.
+    world.singletons.add('conf_path', '/...')
 
     class Conf(Constants):
         IMDB_HOST = const[str]('imdb.host')
@@ -149,10 +152,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         IMDB_PORT = const[int]('imdb.port')
         IMDB_API_KEY = const[str]('imdb.api_key')
 
-        # `use_names=True` specifies that Antidote can use the argument names
-        # when type hints are not present or too generic (builtins typically).
-        __antidote__ = Constants.Conf().with_wiring(use_names=True)
-
+        @inject(use_names=True)
         def __init__(self, conf_path: str):
             """ Load configuration from `conf_path` """
             self._raw_conf = {
@@ -163,7 +163,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
                 }
             }
 
-        def get(self, key):
+        def get(self, key: str):
             """
             self.get('a.b') <=> self._raw_conf['a']['b']
             """
@@ -171,21 +171,14 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
             return reduce(dict.get, key.split('.'), self._raw_conf)  # type: ignore
 
     # ImdbAPI will be provided by this factory, as defined by the return type annotation.
-    # The dependencies arguments specifies what must be injected
     @factory(dependencies=(Conf.IMDB_HOST, Conf.IMDB_PORT, Conf.IMDB_API_KEY))
     def imdb_factory(host: str, port: int, api_key: str) -> ImdbAPI:
-        # Here host = Conf().get('imdb.host')
         return ImdbAPI(host=host, port=port, api_key=api_key)
 
     # Implementation tells Antidote that this class should be used as an implementation of
     # the interface MovieDB
     class IMDBMovieDB(MovieDB, Implementation):
-        # As ImdbAPI is provided by imdb_factory, Antidote requires it to be explicitly
-        # specified. This ensures that can always track back where dependencies are
-        # coming from.
-        __antidote__ = Implementation.Conf().with_wiring(
-            dependencies=dict(imdb_api=ImdbAPI @ imdb_factory))
-
+        @inject(dependencies=dict(imdb_api=ImdbAPI @ imdb_factory))
         def __init__(self, imdb_api: ImdbAPI):
             self._imdb_api = imdb_api
 
@@ -197,24 +190,6 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         assert movie_db is not None
         pass
 
-    # You can also retrieve dependencies by hand
-    world.get(Conf.IMDB_HOST)
-    # To help Mypy to for type checking you can provide a type hint. Contrary to const,
-    # it won't enforce anything, like typing.cast().
-    world.get[str](Conf.IMDB_HOST)
-    # To avoid repetition, if the dependency is the type itself, you may omit it:
-    world.get[IMDBMovieDB]()
-
-    # If you need to handle multiple different api_keys for some reason you can
-    # specify them in the dependency itself:
-    world.get[ImdbAPI](ImdbAPI @ imdb_factory.with_kwargs(api_key='XX'))
-    # As imdb_factory returns a singleton, by default, this will also be the case
-    # here. Using the same API key, will return the same instance. This avoids boilerplate
-    # code when the same instance is needed with different arguments. The same works
-    # with a Service. In the previous example you could have
-    # used `Database.with_kwargs(host='something')`
-
-    # Like before you can call f() without any arguments:
     f()
 
 That looks all good, but what about testability ?
@@ -298,12 +273,13 @@ same API than the pure Python implementation. This implies that you cannot depen
 own Cython code if any. It may be moved to another language.
 
 If you encounter any inconsistencies, please open an issue !
-You can avoid the pre-compiled wheels from PyPI with the following:
+You can avoid the Cython version from PyPI with the following:
 
 .. code-block:: bash
 
     pip install --no-binary antidote
 
+Note that PyPy is tested with the pure Python version, not the Cython one.
 
 Mypy
 ====
