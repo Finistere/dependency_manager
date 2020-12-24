@@ -27,6 +27,7 @@ Antidotes is a dependency injection micro-framework for Python 3.6+. It is desig
   is about removing the responsibility of building dependencies from their clients. Not separating
   how a dependency is built from its implementation.
 - It should help creating maintainable code in a straightforward way and offer effortless integration.
+  One must be able to integrate it partially.
 
 It provides the following features:
 
@@ -36,8 +37,6 @@ It provides the following features:
     - no \*\*kwargs arguments hiding actual arguments and fully mypy typed, helping you and your IDE.
     - documented, see `<https://antidote.readthedocs.io/en/stable>`_. If you don't find what you need, open an issue ;)
     - thread-safe, cycle detection
-    - magic is frowned upon and avoided as much as possible. But it is used when it doesn't hurt
-      understandability and improves readability.
 - Flexibility
     - A rich ecosystem of dependencies out of the box: services, configuration, factories, interface/implementation, tags.
     - All of those are implemented on top of the core implementation. If Antidote doesn't provide what you need, there's
@@ -45,11 +44,11 @@ It provides the following features:
 - Maintainability
     - The different kind of dependencies are designed to be easy to track back. Finding where a
       dependency is defined is easy.
-    - Overriding dependencies will raise an exception (no duplicates) and one can freeze the
-      dependency space. Once frozen, no new dependencies can be defined.
+    - Overriding dependencies (duplicates) and injecting twice will raise an exception.
+    - Dependencies can be frozen, which blocks any new definitions.
 - Testability
     - `@inject` lets you override any injections by passing explicitly the arguments.
-    - Override dependencies locally within a context manager.
+    - Change dependencies locally within a context manager.
 - Performance
     - Antidote has two implementations: the pure Python one which is the reference and the
       Cython one which is heavily tuned for fast injection. Injection is roughly 10x times faster
@@ -88,14 +87,12 @@ How does injection looks like ? Here is a simple example:
         def get(self, key: str):
             return self._data[key]
 
-    class Database(Service):
+    class Database(Service):  # Defined as a Service, so injectable.
         @inject(dependencies=dict(host=Conf.DB_HOST))
         def __init__(self, host: str):
-            # Here host = Conf().get('host')
-            self._host = host
+            self._host = host  # <=> Conf().get('host')
 
-    # By default only type annotations are used.
-    @inject
+    @inject # By default only type annotations are used.
     def f(db: Database = None):
         # Defaulting to None allows for MyPy compatibility but isn't required to work.
         assert db is not None
@@ -106,14 +103,13 @@ How does injection looks like ? Here is a simple example:
 
     # You can also retrieve dependencies by hand
     world.get(Conf.DB_HOST)
-    # with type hint
-    world.get[str](Conf.DB_HOST)
+    world.get[str](Conf.DB_HOST) # with type hint
     # if the dependency is the type itself, you may omit it:
     world.get[Database]()
 
     # If you need to handle multiple different host for some reason you can
-    # specify them in the dependency itself. As Database returns a singleton,
-    # by default, this will also be the case here. Using the same host, will
+    # specify them in the dependency itself. As Database returns, by default,
+    # a singleton this will also be the case here. Using the same host, will
     # return the same instance.
     world.get[Database](Database.with_kwargs(host='XX'))
 
@@ -142,8 +138,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         def __init__(self, *args, **kwargs):
             pass
 
-    # Defining a singleton.
-    world.singletons.add('conf_path', '/...')
+    world.singletons.add('conf_path', '/etc/app.conf')
 
     class Conf(Constants):
         IMDB_HOST = const[str]('imdb.host')
@@ -152,7 +147,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         IMDB_PORT = const[int]('imdb.port')
         IMDB_API_KEY = const[str]('imdb.api_key')
 
-        @inject(use_names=True)
+        @inject(use_names=True)  # injecting world.get('conf_path')
         def __init__(self, conf_path: str):
             """ Load configuration from `conf_path` """
             self._raw_conf = {
@@ -164,21 +159,22 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
             }
 
         def get(self, key: str):
-            """
-            self.get('a.b') <=> self._raw_conf['a']['b']
-            """
             from functools import reduce
+            # self.get('a.b') <=> self._raw_conf['a']['b']
             return reduce(dict.get, key.split('.'), self._raw_conf)  # type: ignore
 
-    # ImdbAPI will be provided by this factory, as defined by the return type annotation.
+    # Provides ImdbAPI, as defined by the return type annotation.
     @factory(dependencies=(Conf.IMDB_HOST, Conf.IMDB_PORT, Conf.IMDB_API_KEY))
     def imdb_factory(host: str, port: int, api_key: str) -> ImdbAPI:
+        # Here host = Conf().get('imdb.host')
         return ImdbAPI(host=host, port=port, api_key=api_key)
 
-    # Implementation tells Antidote that this class should be used as an implementation of
-    # the interface MovieDB
+    # When requesting MovieDB, a IMDBMovieDB instance will be provided.
     class IMDBMovieDB(MovieDB, Implementation):
-        @inject(dependencies=dict(imdb_api=ImdbAPI @ imdb_factory))
+        # New instance each time
+        __antidote__ = Implementation.Conf(singleton=False)
+
+        @inject(dependencies={'imdb_api': ImdbAPI @ imdb_factory})
         def __init__(self, imdb_api: ImdbAPI):
             self._imdb_api = imdb_api
 
@@ -187,7 +183,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
 
     @inject
     def f(movie_db: MovieDB = None):
-        assert movie_db is not None
+        assert movie_db is not None  # for Mypy
         pass
 
     f()

@@ -13,13 +13,12 @@ def test_readme_simple():
         def get(self, key: str):
             return self._data[key]
 
-    class Database(Service):
+    class Database(Service):  # Defined as a Service, so injectable.
         @inject(dependencies=dict(host=Conf.DB_HOST))
         def __init__(self, host: str):
-            self._host = host
+            self._host = host  # <=> Conf().get('host')
 
-    # By default only type annotations are used.
-    @inject
+    @inject  # By default only type annotations are used.
     def f(db: Database = None):
         # Defaulting to None allows for MyPy compatibility but isn't required to work.
         assert db is not None
@@ -30,14 +29,13 @@ def test_readme_simple():
 
     # You can also retrieve dependencies by hand
     world.get(Conf.DB_HOST)
-    # with type hint
-    world.get[str](Conf.DB_HOST)
+    world.get[str](Conf.DB_HOST)  # with type hint
     # if the dependency is the type itself, you may omit it:
     world.get[Database]()
 
-    # If you need to handle multiple different host for some reason you can
-    # specify them in the dependency itself. As Database returns a singleton,
-    # by default, this will also be the case here. Using the same host, will
+    # If you need to handle multiple hosts for some reason you can
+    # specify them in the dependency itself. As Database returns, by default,
+    # a singleton this will also be the case here. Using the same host, will
     # return the same instance.
     world.get[Database](Database.with_kwargs(host='XX'))
 
@@ -62,8 +60,7 @@ def test_readme():
         def __init__(self, *args, **kwargs):
             pass
 
-    # Defining a singleton.
-    world.singletons.add('conf_path', '/...')
+    world.singletons.add('conf_path', '/etc/app.conf')
 
     class Conf(Constants):
         IMDB_HOST = const[str]('imdb.host')
@@ -72,7 +69,7 @@ def test_readme():
         IMDB_PORT = const[int]('imdb.port')
         IMDB_API_KEY = const[str]('imdb.api_key')
 
-        @inject(use_names=True)
+        @inject(use_names=True)  # injecting world.get('conf_path')
         def __init__(self, conf_path: str):
             """ Load configuration from `conf_path` """
             self._raw_conf = {
@@ -84,22 +81,22 @@ def test_readme():
             }
 
         def get(self, key: str):
-            """
-            self.get('a.b') <=> self._raw_conf['a']['b']
-            """
             from functools import reduce
+            # self.get('a.b') <=> self._raw_conf['a']['b']
             return reduce(dict.get, key.split('.'), self._raw_conf)  # type: ignore
 
-    # ImdbAPI will be provided by this factory, as defined by the return type annotation.
+    # Provides ImdbAPI, as defined by the return type annotation.
     @factory(dependencies=(Conf.IMDB_HOST, Conf.IMDB_PORT, Conf.IMDB_API_KEY))
     def imdb_factory(host: str, port: int, api_key: str) -> ImdbAPI:
         # Here host = Conf().get('imdb.host')
         return ImdbAPI(host=host, port=port, api_key=api_key)
 
-    # Implementation tells Antidote that this class should be used as an implementation of
-    # the interface MovieDB
+    # When requesting MovieDB, a IMDBMovieDB instance will be provided.
     class IMDBMovieDB(MovieDB, Implementation):
-        @inject(dependencies=dict(imdb_api=ImdbAPI @ imdb_factory))
+        # New instance each time
+        __antidote__ = Implementation.Conf(singleton=False)
+
+        @inject(dependencies={'imdb_api': ImdbAPI @ imdb_factory})
         def __init__(self, imdb_api: ImdbAPI):
             self._imdb_api = imdb_api
 
@@ -108,12 +105,10 @@ def test_readme():
 
     @inject
     def f(movie_db: MovieDB = None):
-        assert movie_db is not None
+        assert movie_db is not None  # for Mypy
         pass
 
     f()
-
-    # equivalent to
 
     conf = Conf('/path')
     f(IMDBMovieDB(imdb_factory(
