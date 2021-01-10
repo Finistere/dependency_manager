@@ -5,7 +5,7 @@ from ._compatibility.typing import final
 from ._internal import API
 from ._internal.utils import debug_repr, FinalImmutable, short_id
 from ._providers import Lazy
-from .core import Container, DependencyDebug, DependencyInstance, Scope
+from .core import Container, DependencyDebug, DependencyValue, Scope
 
 if TYPE_CHECKING:
     from .lazy import LazyMethodCall
@@ -34,9 +34,9 @@ class LazyCallWithArgsKwargs(FinalImmutable, Lazy):
                                scope=self._scope,
                                wired=[self.func])
 
-    def lazy_get(self, container: Container) -> DependencyInstance:
-        return DependencyInstance(self.func(*self._args, **self._kwargs),
-                                  scope=self._scope)
+    def lazy_get(self, container: Container) -> DependencyValue:
+        return DependencyValue(self.func(*self._args, **self._kwargs),
+                               scope=self._scope)
 
 
 @API.private
@@ -97,9 +97,9 @@ class LazyMethodCallDependency(FinalImmutable, Lazy):
                                wired=[getattr(owner, descriptor._method_name)],
                                dependencies=[owner])
 
-    def lazy_get(self, container: Container) -> DependencyInstance:
+    def lazy_get(self, container: Container) -> DependencyValue:
         owner = self.__owner_ref()
         assert owner is not None
         descriptor = cast('LazyMethodCall', self.__descriptor)
-        return DependencyInstance(descriptor.__get__(container.get(owner), owner),
-                                  scope=descriptor._scope)
+        return DependencyValue(descriptor.__get__(container.get(owner), owner),
+                               scope=descriptor._scope)

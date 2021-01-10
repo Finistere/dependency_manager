@@ -1,51 +1,28 @@
-from typing import cast, Dict, Tuple, Type
+import functools
+from typing import Callable, Hashable
 
 from ._internal import API
-from ._providers import IndirectProvider
-from ._service import ServiceMeta
-from .core import inject
-
-_ABSTRACT_FLAG = '__antidote_abstract'
+from ._providers.indirect import ImplementationDependency
 
 
 @API.private
-class ImplementationMeta(ServiceMeta):
-    def __new__(mcs: 'Type[ImplementationMeta]',
-                name: str,
-                bases: Tuple[type, ...],
-                namespace: Dict[str, object],
-                **kwargs: object
-                ) -> 'ImplementationMeta':
-        interface = None
-        if any(isinstance(b, ImplementationMeta) for b in bases):
-            if kwargs.get("abstract"):
-                raise ValueError("Implementation does not support abstract sub classes")
+class ImplementationWrapper:
+    def __init__(self,
+                 wrapped: Callable[..., object],
+                 implementation_dependency: ImplementationDependency) -> None:
+        self.__wrapped__ = wrapped
+        self.__implementation_dependency = implementation_dependency
+        functools.wraps(wrapped, updated=())(self)
 
-            if len(bases) < 2:
-                raise TypeError("The interface to be implemented must be specified "
-                                "as first base class.")
-            interface, impl_base, *_ = bases
+    def __call__(self, *args: object, **kwargs: object) -> object:
+        return self.__wrapped__(*args, **kwargs)
 
-            if not isinstance(impl_base, ImplementationMeta) \
-                    or sum(1 for b in bases if isinstance(b, ImplementationMeta)) > 1:
-                raise TypeError("The second base class, and only this one, "
-                                "must be Implementation.")
+    def __rmatmul__(self, left_operand: Hashable) -> object:
+        if left_operand is not self.__implementation_dependency.interface:
+            interface = self.__implementation_dependency.interface
+            raise ValueError(f"Unsupported interface {left_operand}, "
+                             f"expected {interface}")
+        return self.__implementation_dependency
 
-        cls = cast(
-            ImplementationMeta,
-            super().__new__(mcs, name, bases, namespace, **kwargs)
-        )
-
-        if interface is not None:
-            _configure_implementation(interface, cls)
-
-        return cls
-
-
-@API.private
-@inject
-def _configure_implementation(interface: type,
-                              cls: ImplementationMeta,
-                              indirect_provider: IndirectProvider = None) -> None:
-    assert indirect_provider is not None
-    indirect_provider.register_static(interface, cls)
+    def __getattr__(self, item: str) -> object:
+        return getattr(self.__wrapped__, item)

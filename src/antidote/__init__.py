@@ -2,7 +2,7 @@ from . import world
 from .constants import const, Constants
 from .core import inject, wire, Wiring, Scope
 from .factory import factory, Factory
-from .implementation import Implementation, implementation
+from .implementation import implementation
 from .lazy import LazyCall, LazyMethodCall
 from .service import service, Service
 from .tag import Tag, Tagged
@@ -18,5 +18,5 @@ def __version__() -> str:  # pragma: no cover
 
 
 __all__ = ['world', 'const', 'Constants', 'inject', 'wire', 'Wiring', 'factory',
-           'Factory', 'Implementation', 'implementation', 'LazyCall', 'LazyMethodCall',
+           'Factory', 'implementation', 'LazyCall', 'LazyMethodCall',
            'service', 'Service', 'Tag', 'Tagged', 'is_compiled']

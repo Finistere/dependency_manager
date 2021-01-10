@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from typing import Callable, cast, Generic, Hashable, Iterator, Optional, TypeVar
 
 from ._provider import _FREEZE_ATTR_NAME, ProviderMeta
-from .container import Container, DependencyInstance, RawProvider
+from .container import Container, DependencyValue, RawProvider
 from .exceptions import DebugNotAvailableError
 from .utils import DependencyDebug
 from .._compatibility.typing import final
@@ -41,7 +41,7 @@ class Provider(RawProvider, Generic[T],
         >>> from typing import Hashable, Optional
         >>> from antidote import world, Scope
         >>> from antidote.core import Provider, Container, \\
-        ...     DependencyInstance, does_not_freeze
+        ...     DependencyValue, does_not_freeze
         >>> @world.provider
         ... class SquareProvider(Provider[int]):
         ...     def __init__(self, registered: set = None):
@@ -56,8 +56,8 @@ class Provider(RawProvider, Generic[T],
         ...         return isinstance(dependency, int) and dependency in self._registered
         ...
         ...     def provide(self, dependency: int, container: Container
-        ...                 ) -> DependencyInstance:
-        ...         return DependencyInstance(self._square(dependency),
+        ...                 ) -> DependencyValue:
+        ...         return DependencyValue(self._square(dependency),
         ...                                   scope=Scope.singleton())
         ...
         ...     # we don't want this method to fail when world freezes
@@ -136,7 +136,7 @@ class Provider(RawProvider, Generic[T],
         """
         raise NotImplementedError()
 
-    def provide(self, dependency: T, container: Container) -> DependencyInstance:
+    def provide(self, dependency: T, container: Container) -> DependencyValue:
         """
         Method called by the :py:class:`~.core.container.Container` when
         searching for a dependency. Be sure that the dependency space of your
@@ -160,7 +160,7 @@ class Provider(RawProvider, Generic[T],
 
         Returns:
             The requested instance wrapped in a
-            :py:class:`~.core.container.DependencyInstance`. If the dependency is a
+            :py:class:`~.core.container.DependencyValue`. If the dependency is a
             singleton, you MUST specify it with :code:`singleton=True`.
         """
         raise NotImplementedError("Either implement provide()"
@@ -186,7 +186,7 @@ class Provider(RawProvider, Generic[T],
     def maybe_provide(self,
                       dependency: Hashable,
                       container: Container
-                      ) -> Optional[DependencyInstance]:
+                      ) -> Optional[DependencyValue]:
         """
         **Expert feature**
 
@@ -199,7 +199,7 @@ class Provider(RawProvider, Generic[T],
 
         Returns:
             The requested instance wrapped in a
-            :py:class:`~.core.container.DependencyInstance` if available or
+            :py:class:`~.core.container.DependencyValue` if available or
             :py:obj:`None`. If the dependency is a singleton, you MUST specify it
             with :code:`singleton=True`.
 
@@ -272,15 +272,15 @@ class StatelessProvider(Provider[T], abstract=True):
 
         >>> from typing import Hashable, Optional
         >>> from antidote import world, Scope
-        >>> from antidote.core import StatelessProvider, Container, DependencyInstance
+        >>> from antidote.core import StatelessProvider, Container, DependencyValue
         >>> @world.provider
         ... class SquareProvider(StatelessProvider[int]):
         ...     def exists(self, dependency: Hashable) -> bool:
         ...         return isinstance(dependency, int)
         ...
         ...     def provide(self, dependency: int, container: Container
-        ...                 ) -> Optional[DependencyInstance]:
-        ...         return DependencyInstance(dependency ** 2, scope=Scope.singleton())
+        ...                 ) -> Optional[DependencyValue]:
+        ...         return DependencyValue(dependency ** 2, scope=Scope.singleton())
         >>> world.get(9)
         81
 

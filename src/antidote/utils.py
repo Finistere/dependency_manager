@@ -1,12 +1,14 @@
 import collections.abc as c_abc
-from typing import Iterable, Optional, Tuple
+import inspect
+from typing import Iterable, Optional, Tuple, Hashable
 
 from ._internal import API
 from .core import Scope
 from .core.injection import validate_injection
 from .tag import Tag
 
-__all__ = ['is_compiled', 'validate_injection', 'validated_tags', 'validated_scope']
+__all__ = ['is_compiled', 'validate_injection', 'validated_tags',
+           'validated_scope', 'validate_provided_class']
 
 
 @API.public
@@ -72,3 +74,31 @@ def validated_scope(scope: Optional[Scope] = Scope.sentinel(),
                         f"not {type(singleton)}")
 
     return default if scope is Scope.sentinel() else scope
+
+
+@API.experimental
+def validate_provided_class(dependency: Hashable, *, expected: type) -> None:
+    """
+    Verify that the dependency will provide a class which is a subclass
+    of :code:`expected`.
+
+    :meta: private
+    """
+    # import private stuff
+    from ._providers.factory import FactoryDependency
+    from ._providers.service import Build
+    from ._providers.indirect import ImplementationDependency
+
+    cls: object = dependency
+    if isinstance(cls, Build):
+        cls = cls.dependency
+    if isinstance(cls, FactoryDependency):
+        cls = cls.output
+    if isinstance(cls, ImplementationDependency):
+        cls = cls.interface
+
+    if not (isinstance(cls, type) and inspect.isclass(cls)):
+        raise TypeError(f"{dependency} does not provide any class")
+
+    if not issubclass(cls, expected):
+        raise TypeError(f"Expected a subclass of {expected}, not {cls}")

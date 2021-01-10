@@ -81,7 +81,7 @@ def test_register(singleton: bool):
         provider = ServiceProvider()
         provider.register(A, scope=Scope.singleton() if singleton else None)
         assert world.test.maybe_provide_from(provider, A).is_singleton() is singleton
-        assert isinstance(world.test.maybe_provide_from(provider, A).value, A)
+        assert isinstance(world.test.maybe_provide_from(provider, A).unwrapped, A)
 
 
 def test_build(provider: ServiceProvider, scope: Scope):
@@ -111,10 +111,10 @@ def test_copy(provider: ServiceProvider,
     cloned = provider.clone(keep_singletons_cache)
     if keep_singletons_cache:
         with world.test.clone(keep_singletons=True):
-            assert isinstance(world.test.maybe_provide_from(cloned, A).value, A)
+            assert isinstance(world.test.maybe_provide_from(cloned, A).unwrapped, A)
     else:
         with world.test.clone(keep_singletons=False):
-            assert isinstance(world.test.maybe_provide_from(cloned, A).value, A)
+            assert isinstance(world.test.maybe_provide_from(cloned, A).unwrapped, A)
 
     class D:
         pass
@@ -129,7 +129,7 @@ def test_copy(provider: ServiceProvider,
 
     # changing cloned does not change original
     cloned.register(E, scope=scope)
-    assert isinstance(world.test.maybe_provide_from(cloned, E).value, E)
+    assert isinstance(world.test.maybe_provide_from(cloned, E).unwrapped, E)
     with pytest.raises(DependencyNotFoundError):
         world.get(E)
 
@@ -161,3 +161,12 @@ def test_custom_scope(provider: ServiceProvider):
     assert my_service is world.get(MyService)
     world.scopes.reset(dummy_scope)
     assert my_service is not world.get(MyService)
+
+
+@pytest.mark.parametrize('klass, scope', [
+    pytest.param(object(), None, id='klass'),
+    pytest.param(A, object(), id='scope')
+])
+def test_sanity_checks(provider: ServiceProvider, klass, scope):
+    with pytest.raises(AssertionError):
+        provider.register(klass, scope=scope)

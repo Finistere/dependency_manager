@@ -13,7 +13,8 @@ from cpython.ref cimport Py_XINCREF, PyObject, Py_XDECREF
 
 from antidote._internal.stack cimport DependencyStack
 from .exceptions import (DependencyCycleError, DependencyInstantiationError,
-                         DependencyNotFoundError, DuplicateDependencyError, FrozenWorldError)
+                         DependencyNotFoundError, DuplicateDependencyError,
+                         FrozenWorldError)
 # @formatter:on
 
 cdef extern from "Python.h":
@@ -22,7 +23,6 @@ cdef extern from "Python.h":
     Py_ssize_t PyTuple_GET_SIZE(PyObject *p)
     int PyDict_SetItem(PyObject *p, PyObject *key, PyObject *val) except -1
     PyObject*PyDict_GetItem(PyObject *p, PyObject *key)
-
 
 ##############
 # Dependency #
@@ -64,7 +64,6 @@ cdef Header header_flag_no_scope():
 cdef Header header_flag_cacheable():
     return HEADER_FLAG_CACHEABLE
 
-
 @cython.final
 cdef class Scope:
     def __init__(self, str name):
@@ -83,7 +82,6 @@ cdef class Scope:
 
 _SCOPE_SINGLETON = Scope('singleton')
 _SCOPE_SENTINEL = Scope('__sentinel__')
-
 
 cdef class HeaderObject:
     """
@@ -121,21 +119,20 @@ cdef class HeaderObject:
     def is_cacheable(self):
         return header_is_cacheable(self.header)
 
-
 @cython.freelist(64)
 @cython.final
-cdef class DependencyInstance:
-    def __cinit__(self, value, *, Scope scope = None):
+cdef class DependencyValue:
+    def __init__(self, value, *, Scope scope = None):
         assert scope is not _SCOPE_SENTINEL
-        self.value = value
+        self.unwrapped = value
         self.scope = scope
 
     def __repr__(self):
-        return f"DependencyInstance(value={self.value}, singleton={self.singleton})"
+        return f"DependencyValue(unwrapped={self.unwrapped}, scope={self.scope})"
 
     def __eq__(self, other):
-        return isinstance(other, DependencyInstance) \
-               and self.value == other.value \
+        return isinstance(other, DependencyValue) \
+               and self.unwrapped == other.unwrapped \
                and self.scope == other.scope
 
     def is_singleton(self) -> bool:
@@ -143,17 +140,17 @@ cdef class DependencyInstance:
 
     cdef to_result(self, DependencyResult *result):
         result.header = HeaderObject.from_scope(self.scope).header
-        result.value = <PyObject*> self.value
+        result.value = <PyObject*> self.unwrapped
         Py_XINCREF(result.value)
 
-cdef DependencyInstance build_dependency_instance(RawContainer container,
-                                                  DependencyResult *result):
-    scope = HeaderObject(result.header).to_scope(container)
-    value = <object> result.value
-    Py_XDECREF(result.value)
-    return DependencyInstance.__new__(DependencyInstance,
-                                      value,
-                                      scope=scope)
+    @staticmethod
+    cdef DependencyValue from_result(RawContainer container, DependencyResult *result):
+        scope = HeaderObject(result.header).to_scope(container)
+        value = <object> result.value
+        Py_XDECREF(result.value)
+        return DependencyValue.__new__(DependencyValue,
+                                       value,
+                                       scope=scope)
 
 ############
 # PROVIDER #
@@ -186,7 +183,7 @@ cdef class RawProvider:
 
     def maybe_provide(self,
                       dependency: Hashable,
-                      container: Container) -> DependencyInstance:
+                      container: Container) -> DependencyValue:
         raise NotImplementedError()
 
     cdef fast_provide(self,
@@ -194,7 +191,7 @@ cdef class RawProvider:
                       PyObject*container,
                       DependencyResult*result):
         cdef:
-            DependencyInstance dependency_instance
+            DependencyValue dependency_instance
         dependency_instance = self.maybe_provide(<object> dependency,
                                                  <Container> container)
         if dependency_instance is not None:
@@ -241,13 +238,13 @@ cdef class RawProvider:
 cdef class FastProvider(RawProvider):
     def maybe_provide(self,
                       dependency: Hashable,
-                      container: Container) -> DependencyInstance:
+                      container: Container) -> DependencyValue:
         cdef:
             DependencyResult result
         result.value = NULL
         self.fast_provide(<PyObject*> dependency, <PyObject*> container, &result)
         if result.value:
-            return build_dependency_instance(self._bound_container(), &result)
+            return DependencyValue.from_result(self._bound_container(), &result)
         return None
 
     cdef fast_provide(self,
@@ -265,22 +262,13 @@ cdef class RawContainer(Container):
     Behaves the same as the Python implementation but with additional optimizations:
 
     - singletons clock: Avoid testing twice the singleton dictionary it hasn't changed
-                        since the first, not thread-safe, check.
-    - cache: Recurring non singletons dependencies will not go through the usual _providers
-             loop and their provider will be cached. This avoids the overhead of each
-             provider checking whether it's a dependency it can provide or not.
+                        since the first check.
+    - cache: Singletons are caching in simplified and faster hash map. For other
+             dependencies, if the header specify cacheable, the provider and scope will
+             be cached.
     """
 
-    def __init__(self, *, cache_size: int = 16):
-        cdef:
-            size_t capacity
-            size_t*counter
-        if not isinstance(cache_size, int):
-            raise TypeError("cache_size must be a strictly positive integer.")
-        if cache_size <= 0:
-            raise ValueError("cache_size must be a strictly positive integer.")
-        capacity = <size_t> cache_size
-
+    def __init__(self):
         self._providers = list()  # type: List[RawProvider]
         self._singletons = dict()  # type: dict
         self._dependency_stack = DependencyStack()
@@ -305,15 +293,17 @@ cdef class RawContainer(Container):
     def create_scope(self, str name):
         cdef:
             Scope s = Scope(name)
-        s.id = <ScopeId> (1 + len(self._scopes))
-        assert s.id <= 0xFF
-        assert all(s.name != name for s in self._scopes)
-        self._scopes.append(s)
-        self._scope_dependencies.append(dict())
+        with self.locked():
+            s.id = <ScopeId> (1 + len(self._scopes))
+            assert s.id <= 0xFF
+            assert all(s.name != name for s in self._scopes)
+            self._scopes.append(s)
+            self._scope_dependencies.append(dict())
         return s
 
     def reset_scope(self, Scope scope):
-        self._scope_dependencies[scope.id - 1] = dict()
+        with self._instantiation_lock:
+            self._scope_dependencies[scope.id - 1] = dict()
 
     cdef Scope get_scope(self, ScopeId scope_id):
         return <Scope> self._scopes[scope_id - 1]
@@ -393,7 +383,7 @@ cdef class RawContainer(Container):
             RawContainer c = type(self)()
 
         c._is_clone = True
-        with self._freeze_lock, self._instantiation_lock:
+        with self.locked():
             # clone is only used for tests, so don't really care about the cache.
             if keep_singletons:
                 c._singletons = self._singletons.copy()
@@ -438,7 +428,7 @@ cdef class RawContainer(Container):
 
         self.fast_get(<PyObject*> dependency, &result)
         if result.value:
-            return build_dependency_instance(self, &result)
+            return DependencyValue.from_result(self, &result)
         raise DependencyNotFoundError(dependency)
 
     def get(self, dependency: Hashable):
@@ -455,7 +445,7 @@ cdef class RawContainer(Container):
 
     # No ownership from here on. You MUST keep a valid reference to dependency.
     # result.value will be initialized to NULL here, so it doesn't need to be done
-    # anywhere else.
+    # anywhere else as everything needs to go through fast_get.
     cdef fast_get(self, PyObject *dependency, DependencyResult *result):
         cdef:
             CacheValue *value
@@ -661,7 +651,6 @@ cdef class DependencyCache:
     cdef:
         size_t mask
         size_t used
-        size_t singletons
         Entry *table
 
     def __cinit__(self):
@@ -787,15 +776,14 @@ cdef class OverridableRawContainer(RawContainer):
 
 
     def __init__(self):
-        from collections import defaultdict
         super().__init__()
         self._is_clone = True
         self.__override_lock = threading.RLock()
         # Used to differentiate singletons from the overrides and the "normal" ones.
         self.__singletons_override = dict()
-        self.__scopes_override = dict() # type:  Dict[Scope, Dict[Hashable, object]]
+        self.__scopes_override = dict()  # type:  Dict[Scope, Dict[Hashable, object]]
         self.__factory_overrides = dict()  # type: Dict[Any, Tuple[Callable[[], Any], Optional[Scope]]]
-        self.__provider_overrides = deque()  # type: Deque[Callable[[Any], Optional[DependencyInstance]]]
+        self.__provider_overrides = deque()  # type: Deque[Callable[[Any], Optional[DependencyValue]]]
 
     @classmethod
     def from_clone(cls, RawContainer cloned) -> 'OverridableRawContainer':
@@ -831,7 +819,7 @@ cdef class OverridableRawContainer(RawContainer):
             self.__factory_overrides[dependency] = (factory, scope)
 
     def override_provider(self,
-                          provider: Callable[[Any], Optional[DependencyInstance]]):
+                          provider: Callable[[Any], Optional[DependencyValue]]):
         with self.__override_lock:
             self.__provider_overrides.appendleft(provider)  # latest provider wins
 
@@ -898,7 +886,7 @@ cdef class OverridableRawContainer(RawContainer):
                 except KeyError:
                     pass
                 else:
-                    DependencyInstance(obj, scope=_SCOPE_SINGLETON).to_result(result)
+                    DependencyValue(obj, scope=_SCOPE_SINGLETON).to_result(result)
                     return
 
                 for scope, dependencies in self.__scopes_override.items():
@@ -907,7 +895,7 @@ cdef class OverridableRawContainer(RawContainer):
                     except KeyError:
                         pass
                     else:
-                        DependencyInstance(obj, scope=scope).to_result(result)
+                        DependencyValue(obj, scope=scope).to_result(result)
                         return
 
                 try:
@@ -918,7 +906,7 @@ cdef class OverridableRawContainer(RawContainer):
                                 self.__singletons_override[dep] = di.value
                             elif di.scope is not None:
                                 self.__scopes_override[di.scope][dep] = di.value
-                            (<DependencyInstance?> di).to_result(result)
+                            (<DependencyValue?> di).to_result(result)
                             return
 
                     try:
@@ -931,7 +919,7 @@ cdef class OverridableRawContainer(RawContainer):
                             self.__singletons_override[dep] = value
                         elif scope is not None:
                             self.__scopes_override[scope][dep] = value
-                        DependencyInstance(value, scope=scope).to_result(result)
+                        DependencyValue(value, scope=scope).to_result(result)
                         return
 
                 except Exception as error:

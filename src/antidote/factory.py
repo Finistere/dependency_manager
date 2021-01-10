@@ -3,14 +3,14 @@ from typing import (Any, Callable, cast, get_type_hints, Hashable, Iterable, Opt
                     overload, Tuple, TypeVar, Union)
 
 from ._compatibility.typing import final, Protocol
-from ._factory import FactoryMeta, LambdaFactory, PreBuild
+from ._factory import FactoryMeta, FactoryWrapper, PreBuild
 from ._internal import API
 from ._internal.utils import Copy, FinalImmutable
 from ._providers import FactoryProvider, Tag, TagProvider
 from .core import DEPENDENCIES_TYPE, inject, Wiring, WithWiringMixin, Scope
 from .utils import validate_injection, validated_scope, validated_tags
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar('F', bound=Callable[..., object])
 
 
 @API.private
@@ -19,7 +19,7 @@ class FactoryProtocol(Protocol[F]):
     :meta private:
     """
 
-    def __rmatmul__(self, dependency: Hashable) -> object:
+    def __rmatmul__(self, klass: type) -> object:
         pass  # pragma: no cover
 
     def with_kwargs(self, **kwargs: object) -> PreBuild:
@@ -137,9 +137,13 @@ class Factory(metaclass=FactoryMeta, abstract=True):
                 wiring: Wiring to be applied on the factory. By default only
                     :code:`__init__()` and :code:`__call__()` will be wired. To deactivate
                     any wiring at all use :py:obj:`None`.
-                singleton: Whether the returned dependency is a singleton or not. If yes,
-                    the factory will only be called once and its result cached. Defaults
-                    to :py:obj:`True`.
+                singleton: Whether the returned dependency  is a singleton or not. If yes,
+                    the factory will be called at most once and the result re-used.
+                    Mutually exclusive with :code:`scope`. Defaults to :py:obj:`True`
+                scope: Scope of the returned dependency. Mutually exclusive with
+                    :code:`singleton`. The scope defines if and how long the returned
+                    dependency will be cached. See :py:class:`~.core.container.Scope`.
+                    Defaults to :py:meth:`~.core.container.Scope.singleton`.
                 tags: Iterable of :py:class:`~.._providers.tag.Tag` tagging to the
                       provided dependency.
             """
@@ -279,10 +283,15 @@ def factory(f: F = None,
 
     Args:
         f: Callable which builds the dependency.
-        singleton: If True, `func` will only be called once. If not it is
-            called at each injection.
+        singleton: Whether the returned dependency  is a singleton or not. If yes,
+            the factory will be called at most once and the result re-used. Mutually
+            exclusive with :code:`scope`. Defaults to :py:obj:`True`.
+        scope: Scope of the returned dependency. Mutually exclusive with
+            :code:`singleton`. The scope defines if and how long the returned dependency
+            will be cached. See :py:class:`~.core.container.Scope`. Defaults to
+            :py:meth:`~.core.container.Scope.singleton`.
         auto_wire: Whether the function should have its arguments injected or not
-            with :py:func:`~.injection.inject`.
+            with :py:func:`~.injection.inject`. Defaults to :py:obj:`True`.
         dependencies: Propagated to :py:func:`~.injection.inject`.
         use_names: Propagated to :py:func:`~.injection.inject`.
         use_type_hints: Propagated to :py:func:`~.injection.inject`.
@@ -325,14 +334,14 @@ def factory(f: F = None,
                           use_names=use_names,
                           use_type_hints=use_type_hints)
 
-        factory_id = factory_provider.register(factory=func,
+        dependency = factory_provider.register(factory=func,
                                                scope=scope,
                                                output=output)
 
         if tags:
             assert tag_provider is not None  # for Mypy
-            tag_provider.register(dependency=factory_id, tags=tags)
+            tag_provider.register(dependency=dependency, tags=tags)
 
-        return cast(FactoryProtocol[F], LambdaFactory(func, factory_id))
+        return cast(FactoryProtocol[F], FactoryWrapper(func, dependency))
 
     return f and register_factory(f) or register_factory

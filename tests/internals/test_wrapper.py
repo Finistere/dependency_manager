@@ -197,16 +197,15 @@ def test_multiple_injections():
     def f(x, y, z=zz):
         return x, y, z
 
-    with world.test.clone():
-        world.singletons.add(dict(xx=xx, yy=yy))
-        assert (xx, yy, zz) == f()
-        assert (xx, A, zz) == f(y=A)
-        assert (xx, yy, A) == f(z=A)
-        assert (A, yy, zz) == f(x=A)
-        assert (A, yy, B) == f(A, z=B)
+    world.singletons.add(dict(xx=xx, yy=yy))
+    assert (xx, yy, zz) == f()
+    assert (xx, A, zz) == f(y=A)
+    assert (xx, yy, A) == f(z=A)
+    assert (A, yy, zz) == f(x=A)
+    assert (A, yy, B) == f(A, z=B)
 
-        with pytest.raises(TypeError):
-            f(A, x=A)
+    with pytest.raises(TypeError):
+        f(A, x=A)
 
 
 def g():

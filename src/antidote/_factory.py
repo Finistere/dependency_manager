@@ -8,7 +8,6 @@ from ._providers import FactoryProvider, TagProvider
 from ._providers.factory import FactoryDependency
 from ._providers.service import Build
 from .core import Dependency, inject
-from .lazy import LazyCall
 from .service import service
 
 _ABSTRACT_FLAG = '__antidote_abstract'
@@ -40,9 +39,9 @@ class FactoryMeta(AbstractMeta):
 
     @API.public
     def __rmatmul__(cls, left_operand: Hashable) -> object:
-        assert cls.__factory_dependency is not None
         if left_operand is not cls.__factory_dependency.output:
-            raise ValueError(f"Unsupported output {left_operand}")
+            output = cls.__factory_dependency.output
+            raise ValueError(f"Unsupported output {left_operand}, expected {output}")
         return cls.__factory_dependency
 
     @API.public
@@ -103,7 +102,7 @@ def _configure_factory(cls: FactoryMeta,
 
 
 @API.private
-class LambdaFactory:
+class FactoryWrapper:
     def __init__(self, wrapped: Callable[..., object],
                  factory_dependency: FactoryDependency) -> None:
         self.__wrapped__ = wrapped

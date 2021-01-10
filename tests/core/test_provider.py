@@ -4,7 +4,7 @@ from typing import Hashable, Optional
 import pytest
 
 from antidote import world
-from antidote.core import (Container, DependencyInstance, does_not_freeze, Provider,
+from antidote.core import (Container, DependencyValue, does_not_freeze, Provider,
                            StatelessProvider)
 from antidote.exceptions import FrozenWorldError
 
@@ -17,7 +17,7 @@ def does_not_raise():
 def test_freeze_world():
     class DummyProvider(Provider):
         def provide(self, dependency: Hashable, container: Container
-                    ) -> Optional[DependencyInstance]:
+                    ) -> Optional[DependencyValue]:
             return None
 
         def clone(self, keep_singletons_cache: bool) -> 'DummyProvider':
@@ -65,7 +65,7 @@ def test_freeze_world():
 def test_stateless():
     class DummyProvider(StatelessProvider):
         def provide(self, dependency: Hashable, container: Container
-                    ) -> Optional[DependencyInstance]:
+                    ) -> Optional[DependencyValue]:
             return None
 
     p = DummyProvider()
@@ -113,9 +113,9 @@ def test_provide():
             return dependency is x
 
         def provide(self, dependency: Hashable,
-                    container: Container) -> DependencyInstance:
+                    container: Container) -> DependencyValue:
             assert dependency is x
-            return DependencyInstance(None)
+            return DependencyValue(None)
 
     dummy = Dummy()
     assert world.test.maybe_provide_from(dummy, 1) is None
@@ -134,9 +134,9 @@ def test_container_lock():
                 return dependency == 'a'
 
             def provide(self, dependency: Hashable,
-                        container: Container) -> DependencyInstance:
+                        container: Container) -> DependencyValue:
                 ThreadSafetyTest.check_locked(failures)
-                return DependencyInstance('a')
+                return DependencyValue('a')
 
             def change_state(self):
                 with self._container_lock():
@@ -148,9 +148,9 @@ def test_container_lock():
                 return dependency == 'b'
 
             def provide(self, dependency: Hashable,
-                        container: Container) -> DependencyInstance:
+                        container: Container) -> DependencyValue:
                 ThreadSafetyTest.check_locked(failures)
-                return DependencyInstance('b')
+                return DependencyValue('b')
 
             def change_state(self):
                 with self._container_lock():

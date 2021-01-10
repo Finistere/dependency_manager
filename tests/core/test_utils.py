@@ -1,20 +1,20 @@
 from antidote import world
-from antidote.core import Dependency, DependencyDebug, DependencyInstance, Scope
+from antidote.core import Dependency, DependencyDebug, DependencyValue, Scope
 
 
 def test_dependency():
     with world.test.empty():
         world.singletons.add('x', object())
         d = Dependency('x')
-        assert d.value == 'x'
+        assert d.unwrapped == 'x'
         assert d.get() is world.get('x')
 
 
 def test_dependency_instance():
-    ref = DependencyInstance("test", scope=Scope.singleton())
-    assert ref == DependencyInstance("test", scope=Scope.singleton())
-    assert ref != DependencyInstance("test2", scope=Scope.singleton())
-    assert ref != DependencyInstance("test", scope=None)
+    ref = DependencyValue("test", scope=Scope.singleton())
+    assert ref == DependencyValue("test", scope=Scope.singleton())
+    assert ref != DependencyValue("test2", scope=Scope.singleton())
+    assert ref != DependencyValue("test", scope=None)
 
 
 def test_dependency_debug():

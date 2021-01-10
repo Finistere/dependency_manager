@@ -26,7 +26,9 @@ Antidotes is a dependency injection micro-framework for Python 3.6+. It is desig
 - Keep dependency declaration close to the actual code. Dependency injection is about removing
   the responsibility of building dependencies from their clients. It does not imply
   that dependency management should be done in a separate file.
-- It should help creating maintainable code in a straightforward way and offer effortless integration.
+- Help you create navigable and maintainable code by: working with Mypy, preventing ambiguous
+  dependency declaration (duplicates/overrides/conflicts typically) and make it easy to track back
+  where and how a dependency is declared.
 
 It provides the following features:
 
@@ -35,11 +37,12 @@ It provides the following features:
       By default, it will only rely on type hints (classes), but it supports a lot more!
     - no \*\*kwargs arguments hiding actual arguments and fully mypy typed, helping you and your IDE.
     - documented, see `<https://antidote.readthedocs.io/en/stable>`_. If you don't find what you need, open an issue ;)
-    - thread-safe, cycle detection
+    - thread-safe, cycle detection.
 - Flexibility
     - A rich ecosystem of dependencies out of the box: services, configuration, factories, interface/implementation, tags.
     - All of those are implemented on top of the core implementation. If Antidote doesn't provide what you need, there's
       a good chance you can implement it yourself quickly.
+    - scope support
 - Maintainability
     - The different kinds of dependencies are designed to be easy to track back. Finding where a
       dependency is defined is easy.
@@ -50,6 +53,7 @@ It provides the following features:
     - `@inject` lets you override any injections by passing explicitly the arguments.
     - Change dependencies locally within a context manager.
     - When encountering issues you can retrieve the full dependency tree, nicely formatted with `world.debug`.
+    - Override locally in a test any dependencies.
 - Performance
     - Antidote has two implementations: the pure Python one which is the reference and the
       Cython one which is heavily tuned for fast injection. Injection is roughly 10x times faster
@@ -205,7 +209,7 @@ That looks all good, but what about testability ?
     )))
 
     # When testing you can also override locally some dependencies:
-    with world.test.clone(overridable=True, keep_singletons=True):
+    with world.test.clone(keep_singletons=True):
         world.test.override.singleton(Conf.IMDB_HOST, 'other host')
         f()
 

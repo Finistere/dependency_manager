@@ -4,7 +4,7 @@ from typing import Hashable
 cimport cython
 from cpython.object cimport PyObject
 
-from antidote.core.container cimport (Container, DependencyInstance, DependencyResult,
+from antidote.core.container cimport (Container, DependencyValue, DependencyResult,
                                      FastProvider)
 from .._internal.utils import debug_repr
 from ..core.exceptions import DebugNotAvailableError
@@ -22,7 +22,7 @@ cdef class Lazy:
 
     cdef fast_lazy_get(self, PyObject*container, DependencyResult*result):
         cdef:
-            DependencyInstance dependency_instance
+            DependencyValue dependency_instance
         dependency_instance = self.lazy_get(<Container> container)
         if dependency_instance is not None:
             dependency_instance.to_result(result)

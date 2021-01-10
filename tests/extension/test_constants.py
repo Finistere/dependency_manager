@@ -18,7 +18,7 @@ def test_world():
         yield
 
 
-def test_lazy_constants():
+def test_simple():
     class Config(Constants):
         A = const('a')
         B = const('b')
@@ -32,6 +32,33 @@ def test_lazy_constants():
     conf = Config()
     assert conf.A == 'aa'
     assert conf.B == 'bb'
+
+
+def test_default():
+    a = object()
+    b = object()
+
+    class Config(Constants):
+        # exists
+        A = const('a')
+        # default
+        B = const('b', default=b)
+        # nothing
+        C = const('c')
+        # different error
+        D = const('d', default='x')
+
+        def get(self, key):
+            if key == 'd':
+                raise Exception()
+            return dict(a=a)[key]
+
+    assert world.get(Config.A) is a
+    assert world.get(Config.B) is b
+    with pytest.raises(DependencyInstantiationError):
+        world.get(Config.C)
+    with pytest.raises(DependencyInstantiationError):
+        world.get(Config.D)
 
 
 @pytest.mark.parametrize('auto_cast, a, b, c', [
@@ -87,7 +114,7 @@ def test_no_const():
     assert conf.A == 'a'
 
 
-def test_invalid_lazy_method():
+def test_no_get_method():
     class Config(Constants):
         A = const('a')
 
@@ -104,7 +131,7 @@ def test_invalid_conf():
                 pass
 
 
-def test_no_subclass_of_service():
+def test_no_subclass_of_constants():
     class Dummy(Constants):
         def get(self, key):
             pass

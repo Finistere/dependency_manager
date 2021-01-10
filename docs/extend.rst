@@ -49,15 +49,15 @@ the result and the provider will never be called again.
     from typing import Hashable, Optional
 
     from antidote import world
-    from antidote.core import StatelessProvider, DependencyInstance, Container
+    from antidote.core import StatelessProvider, DependencyValue, Container
 
     @world.provider
     class RandomProvider(StatelessProvider[str]):
         def exists(self, dependency: Hashable) -> bool:
             return dependency == 'random'
 
-        def provide(self, dependency: str, container: Container) -> DependencyInstance:
-            return DependencyInstance(random.random(), scope=None)
+        def provide(self, dependency: str, container: Container) -> DependencyValue:
+            return DependencyValue(random.random(), scope=None)
 
 .. doctest:: extend_antidote_add_provider
 
@@ -78,7 +78,7 @@ them out of the box, we expect someone else to provide the examples:
     from typing import Hashable, Optional, Dict, List
 
     from antidote import world, inject
-    from antidote.core import Provider, DependencyInstance, Container
+    from antidote.core import Provider, DependencyValue, Container
 
     @world.provider
     class RandomProvider(Provider[str]):
@@ -96,9 +96,9 @@ them out of the box, we expect someone else to provide the examples:
         def exists(self, dependency: Hashable) -> bool:
             return isinstance(dependency, str) and dependency in self._kind_to_values
 
-        def provide(self, dependency: str, container: Container) -> DependencyInstance:
-            return DependencyInstance(random.choice(self._kind_to_values[dependency]),
-                                      scope=None)
+        def provide(self, dependency: str, container: Container) -> DependencyValue:
+            return DependencyValue(random.choice(self._kind_to_values[dependency]),
+                                   scope=None)
 
         def add_random(self, kind: str, values: List[object]) -> None:
             dependency = f"random:{kind}"
@@ -148,142 +148,3 @@ in a thread-safe environment. This also means that you're not expected to call t
 
 If your method does not add any dependencies and is only used for instantiation, you can tell
 Antidote to avoid it by decorating it with :py:func:`~.core.does_not_freeze`.
-
-
-
-Creating a Scope Provider
-=========================
-
-
-The :py:class:`~.core.Container` only differentiate . Typically in web services, scoping services to the request lifetime
-is often necessary. Antidote doesn't provide anything for this out of the box, as it depends
-too heavily on the framework and your needs. But you can implement it yourself with a
-:py:class:`.Provider`. In short it is the fundamental building blocks of Antidote, the
-ones which actually do instantiate the dependencies for :py:mod:`.world`.
-
-.. testcode:: recipes_scope
-
-    from typing import Callable, Dict, Hashable, Tuple
-
-    from antidote import world
-    from antidote.core import Container, DependencyInstance, does_not_freeze, Provider
-
-
-    @world.provider
-    class ScopeProvider(Provider[Hashable]):
-        def __init__(self):
-            super().__init__()
-            # Caching dependencies for as long as the scope is valid.
-            self._cache: Dict[Hashable, object] = {}
-            # Factories to build the actual dependency instances.
-            self._factories: Dict[Hashable, Tuple[Callable[[], object], bool]] = {}
-
-        ##################################################
-        # Methods that should only be called by Antidote #
-        ##################################################
-
-        # Used to check for duplicates with self._assert_not_duplicate() and before
-        # provide()
-        def exists(self, dependency: Hashable) -> bool:
-            return dependency in self._factories
-
-        # Called by antidote in a thread-safe manner to instantiate the dependency
-        def provide(self, dependency: Hashable, container: Container) -> DependencyInstance:
-            # If you need to access other dependencies, you MUST use container NOT world.
-            try:
-                return DependencyInstance(self._cache[dependency])
-            except KeyError:
-                # provide() is only called if exists() returns true.
-                (factory, scope_singleton) = self._factories[dependency]
-                value = factory()
-                if scope_singleton:
-                    self._cache[dependency] = value
-                return DependencyInstance(value)
-
-        # Used in world.test.clone()
-        def clone(self, keep_singletons_cache: bool) -> 'ScopeProvider':
-            c = ScopeProvider()
-            c._factories = self._factories.copy()
-            return c
-
-        #################################
-        # Methods that anyone can call. #
-        #################################
-
-        def add(self,
-                dependency: Hashable,
-                factory: Callable[[], object],
-                scope_singleton: bool
-                ) -> None:
-            self._assert_not_duplicate(dependency)
-            self._factories[dependency] = (factory, scope_singleton)
-
-        @does_not_freeze  # world.freeze() won't block this method.
-        def reset(self) -> None:
-            """ Reset the current scope """
-            # Ensures no conflict with neither add() nor provide()
-            with self._container_lock():
-                self._cache.clear()
-
-
-A :py:class:`.Provider` should not be exposed directly, the recommended practice is to
-provide a friendlier interface, for example:
-
-.. testcode:: recipes_scope
-
-    from typing import Callable, overload, TypeVar, Union
-
-    from antidote import inject
-
-    C = TypeVar('C', bound=type)
-
-    @overload
-    def scoped(klass: C, *, singleton: bool = False) -> C: ...
-
-
-    @overload
-    def scoped(*, singleton: bool = False) -> Callable[[C], C]: ...
-
-
-    def scoped(klass: C = None, *, singleton: bool = False) -> Union[C, Callable[[C], C]]:
-        @inject
-        def register_factory(c: C, scope_provider: ScopeProvider = None) -> C:
-            assert scope_provider is not None
-            scope_provider.add(dependency=c,
-                               factory=c,
-                               scope_singleton=singleton)
-            return c
-
-        return klass and register_factory(klass) or register_factory
-
-    @inject
-    def reset_scope(scope_provider: ScopeProvider = None) -> None:
-        assert scope_provider is not None
-        scope_provider.reset()
-
-
-Now you can easily define a class which will have a single instance per scope:
-
-.. doctest:: recipes_scope
-
-    >>> @scoped(singleton=True)
-    ... class MyScopedService:
-    ...     pass
-    >>> s1 = world.get[MyScopedService]()
-    >>> world.get[MyScopedService]() is s1
-    True
-    >>> reset_scope()
-    >>> world.get[MyScopedService]() is s1
-    False
-
-In the case of a Flask application, you would have something like :code:`RequestScopedProvider`,
-:code:`@request_scoped` and :code:`reset_request_scope`. You would then just register the
-callback:
-
-.. code-block:: python
-
-    from flask import Flask
-
-    app = Flask(__name__)
-    app.after_request(reset_request_scope)
-

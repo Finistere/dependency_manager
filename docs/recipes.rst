@@ -404,3 +404,54 @@ and use it as a one.
     The second cast is done by :py:class:`.Constants`, controlled by :code:`auto_cast`.
     This will do an actual cast, which provides a nice syntactic sugar to cast integers or
     floats typically as configuration may be stored as a string.
+
+
+
+Scopes
+======
+
+
+A dependency may be associated with a scope. If so it'll cached for as along as the scope is
+valid. The most common scope being the singleton scope where dependencies are cached forever.
+When the scope is set to :py:obj:`None`, the dependency value will be retrieved each time.
+Scopes can be create through :py:func:`.world.scopes.new`. The name is only used to
+have a friendly identifier when debugging.
+
+.. doctest:: recipes_scope
+
+    >>> from antidote import world
+    >>> REQUEST_SCOPE = world.scopes.new('request')
+
+To use the newly created scope, use :code:`scope` parameters:
+
+.. doctest:: recipes_scope
+
+    >>> from antidote import Service
+    >>> class Dummy(Service):
+    ...     __antidote__ = Service.Conf(scope=REQUEST_SCOPE)
+
+As :code:`Dummy` has been defined with a custom scope, the dependency value will
+be kep as long as :code:`REQUEST_SCOPE` stays valid. That is to say, until you reset
+it with :py:func:`.world.scopes.reset`:
+
+.. doctest:: recipes_scope
+
+    >>> dummy = world.get[Dummy]()
+    >>> dummy is world.get(Dummy)
+    True
+    >>> world.scopes.reset(REQUEST_SCOPE)
+    >>> dummy is world.get(Dummy)
+    False
+
+In a Flask app for example you would then just reset the scope after each request:
+
+
+.. code-block:: python
+
+    from flask import Flask
+
+    app = Flask(__name__)
+
+    @app.after_request
+    def reset_request_scope():
+        world.scopes.reset(REQUEST_SCOPE)

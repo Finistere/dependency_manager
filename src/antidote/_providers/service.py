@@ -3,7 +3,7 @@ from typing import cast, Dict, Hashable, Optional
 
 from .._internal import API
 from .._internal.utils import debug_repr, FinalImmutable
-from ..core import Container, DependencyDebug, DependencyInstance, Provider, Scope
+from ..core import Container, DependencyDebug, DependencyValue, Provider, Scope
 
 
 @API.private
@@ -14,7 +14,7 @@ class Build(FinalImmutable):
     _hash: int
 
     def __init__(self, dependency: Hashable, kwargs: Dict[str, object]) -> None:
-        assert isinstance(kwargs, dict) and len(kwargs) > 0
+        assert isinstance(kwargs, dict) and kwargs
 
         try:
             # Try most precise hash first
@@ -72,7 +72,7 @@ class ServiceProvider(Provider[Hashable]):
                                wired=[klass])
 
     def maybe_provide(self, build: Hashable, container: Container
-                      ) -> Optional[DependencyInstance]:
+                      ) -> Optional[DependencyValue]:
         dependency = build.dependency if isinstance(build, Build) else build
         try:
             scope = self.__services[dependency]
@@ -85,13 +85,14 @@ class ServiceProvider(Provider[Hashable]):
         else:
             instance = klass()
 
-        return DependencyInstance(instance, scope=scope)
+        return DependencyValue(instance, scope=scope)
 
     def register(self,
                  klass: type,
                  *,
                  scope: Optional[Scope]
                  ) -> None:
-        assert inspect.isclass(klass)
+        assert inspect.isclass(klass) \
+               and (isinstance(scope, Scope) or scope is None)
         self._assert_not_duplicate(klass)
         self.__services[klass] = scope

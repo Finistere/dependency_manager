@@ -96,6 +96,10 @@ class Constants(metaclass=ConstantsMeta, abstract=True):
                  wiring: Union[Optional[Wiring], Copy] = Copy.IDENTICAL,
                  auto_cast: Union[Union[Sequence[type], bool], Copy] = Copy.IDENTICAL
                  ) -> 'Constants.Conf':
+            """
+            Copies current configuration and overrides only specified arguments.
+            Accepts the same arguments as :py:meth:`.__init__`
+            """
             return Copy.immutable(self, wiring=wiring, auto_cast=auto_cast)
 
     __antidote__: Conf = Conf()

@@ -7,7 +7,7 @@ from ._internal.utils import debug_repr, FinalImmutable, short_id
 from ._lazy import (LazyCallWithArgsKwargs, LazyMethodCallDependency,
                     LazyMethodCallWithArgsKwargs)
 from ._providers import Lazy
-from .core import Container, DependencyDebug, DependencyInstance, Scope
+from .core import Container, DependencyDebug, DependencyValue, Scope
 from .utils import validated_scope
 
 
@@ -49,8 +49,13 @@ class LazyCall(FinalImmutable, Lazy):
         Args:
             func: Function to lazily call, any (keyword-)arguments given by the returned
                 :py:class:`~.LazyCall` itself will be propagated.
-            singleton: Whether or not this is a singleton or not. If yes, the function
-                will only be called once.
+            singleton: Whether the lazy dependency is a singleton or not. If yes,
+                the function will be called at most once and the result re-used. Mutually
+                exclusive with :code:`scope`. Defaults to :py:obj:`True`.
+            scope: Scope of the dependency. Mutually exclusive with :code:`singleton`.
+                The scope defines if and how long the returned dependency will be
+                cached. See :py:class:`~.core.container.Scope`. Defaults to
+                :py:meth:`~.core.container.Scope.singleton`.
         """
         if not callable(func):
             raise TypeError(f"func must be a callable, not {type(func)}")
@@ -75,8 +80,8 @@ class LazyCall(FinalImmutable, Lazy):
                                scope=self._scope,
                                wired=[self.func])
 
-    def lazy_get(self, container: Container) -> DependencyInstance:
-        return DependencyInstance(self.func(), scope=self._scope)
+    def lazy_get(self, container: Container) -> DependencyValue:
+        return DependencyValue(self.func(), scope=self._scope)
 
 
 @API.public
@@ -132,8 +137,13 @@ class LazyMethodCall(FinalImmutable):
         """
         Args:
             method: Method name or the method itself that must be called.
-            singleton: Whether or not this is a singleton or not. If yes, the method
-                will only be called once.
+            singleton: Whether the lazy dependency is a singleton or not. If yes,
+                the function will be called at most once and the result re-used. Mutually
+                exclusive with :code:`scope`. Defaults to :py:obj:`True`.
+            scope: Scope of the dependency. Mutually exclusive with :code:`singleton`.
+                The scope defines if and how long the returned dependency will be
+                cached. See :py:class:`~.core.container.Scope`. Defaults to
+                :py:meth:`~.core.container.Scope.singleton`.
         """
         if not (callable(method) or isinstance(method, str)):
             raise TypeError("method must be a method or its name")

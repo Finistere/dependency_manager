@@ -17,6 +17,7 @@ def test_run_me() -> None:
 
         class Conf(Constants):
             A = const[list]("a")
+            B = const[list]("b", default=[2])
 
             @inject
             def get(self, key: str, my_service: MyService = None) -> object:

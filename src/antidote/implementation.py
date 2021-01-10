@@ -1,40 +1,27 @@
 import functools
 import inspect
-from typing import Callable, Iterable, TypeVar, Union
+from typing import Callable, Iterable, TypeVar, Union, cast
 
-from ._implementation import ImplementationMeta
+from ._compatibility.typing import Protocol
+from ._implementation import ImplementationWrapper
 from ._internal import API
 from ._providers import IndirectProvider
 from .core import inject, DEPENDENCIES_TYPE
-from .service import Service
-from .utils import validate_injection
+from .utils import validate_injection, validate_provided_class
 
-F = TypeVar('F', bound=Callable[[], type])
-C = TypeVar('C', bound=type)
+F = TypeVar('F', bound=Callable[[], object])
 
 
-@API.experimental
-class Implementation(Service, metaclass=ImplementationMeta, abstract=True):
+@API.private
+class ImplementationProtocol(Protocol[F]):
     """
-    Essentially syntactic sugar to define easily a single implementation for an interface.
-    The class will automatically be defined as a :py:class:`~.Service`, hence it has the
-    same features.
-
-    .. doctest:: helpers_implementation_class
-
-        >>> from antidote import world, Implementation
-        >>> class Interface:
-        ...     pass
-        >>> class Impl(Interface, Implementation):
-        ...     pass
-        >>> world.get(Interface)
-        <Impl ...>
-
-    .. note::
-
-        If you need to chose between multiple implementations use
-        :py:func:`.implementation`.
+    :meta private:
     """
+
+    def __rmatmul__(self, klass: type) -> object:
+        pass  # pragma: no cover
+
+    __call__: F
 
 
 @API.public
@@ -45,7 +32,7 @@ def implementation(interface: type,
                    dependencies: DEPENDENCIES_TYPE = None,
                    use_names: Union[bool, Iterable[str]] = None,
                    use_type_hints: Union[bool, Iterable[str]] = None
-                   ) -> Callable[[F], F]:
+                   ) -> Callable[[F], ImplementationProtocol[F]]:
     """
     Function decorator which decides which implementation should be used for
     :code:`interface`.
@@ -77,8 +64,8 @@ def implementation(interface: type,
         >>> world.get(Interface)
         <B ...>
         >>> # Changing choice doesn't matter anymore as the implementation is permanent.
-        ... with world.test.clone(overridable=True):
-        ...     world.singletons.add('choice', 'a')
+        ... with world.test.clone():
+        ...     world.test.override.singleton('choice', 'a')
         ...     world.get(Interface)
         <B ...>
 
@@ -104,9 +91,9 @@ def implementation(interface: type,
         raise TypeError(f"auto_wire must be a boolean or None, not {type(auto_wire)}")
 
     @inject
-    def register(func: F, indirect_provider: IndirectProvider = None) -> F:
-        from ._providers.factory import FactoryDependency
-        from ._providers.service import Build
+    def register(func: F,
+                 indirect_provider: IndirectProvider = None
+                 ) -> ImplementationProtocol[F]:
         assert indirect_provider is not None
 
         if inspect.isfunction(func):
@@ -117,25 +104,16 @@ def implementation(interface: type,
                               use_type_hints=use_type_hints)
 
             @functools.wraps(func)
-            def linker() -> object:
-                dependency = func()
-                cls: object = dependency
-                if isinstance(cls, Build):
-                    cls = cls.dependency
-                if isinstance(cls, FactoryDependency):
-                    cls = cls.output
+            def impl() -> object:
+                dep = func()
+                validate_provided_class(dep, expected=interface)
+                return dep
 
-                if not (isinstance(cls, type) and inspect.isclass(cls)
-                        and issubclass(cls, interface)):
-                    raise TypeError(f"{func} is expected to return a class or a "
-                                    f"Service / Factory dependency which implements"
-                                    f"{interface}")
-                return dependency
-
-            indirect_provider.register_link(interface, linker=linker, permanent=permanent)
+            dependency = indirect_provider.register_implementation(interface, impl,
+                                                                   permanent=permanent)
         else:
             raise TypeError(f"implementation must be applied on a function, "
                             f"not a {type(func)}")
-        return func
+        return cast(ImplementationProtocol[F], ImplementationWrapper(func, dependency))
 
     return register

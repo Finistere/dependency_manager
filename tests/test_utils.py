@@ -2,8 +2,8 @@ from contextlib import contextmanager
 
 import pytest
 
-from antidote import Scope, Tag
-from antidote.utils import validated_scope, validated_tags
+from antidote import Scope, Tag, world, factory, Service, implementation
+from antidote.utils import validated_scope, validated_tags, validate_provided_class
 
 tag = Tag()
 dummy_scope = Scope('dummy')
@@ -59,3 +59,70 @@ def test_invalid_validated_scope(expectation, kwargs):
 ])
 def test_validated_scope(scope, singleton, default, expected):
     assert expected == validated_scope(scope, singleton, default=default)
+
+
+def test_validate_provided_class():
+    class Interface:
+        pass
+
+    with pytest.raises(TypeError):
+        validate_provided_class(object(), expected=Interface)
+
+    class A(Interface, Service):
+        pass
+
+    class B(Service):
+        pass
+
+    validate_provided_class(A, expected=Interface)
+    validate_provided_class(B, expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B, expected=Interface)
+
+    validate_provided_class(A.with_kwargs(a=1), expected=Interface)
+    validate_provided_class(B.with_kwargs(a=1), expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B.with_kwargs(a=1), expected=Interface)
+
+    @implementation(Interface)
+    def choose_a():
+        return A
+
+    @implementation(B)
+    def choose_b():
+        return B
+
+    validate_provided_class(Interface @ choose_a, expected=Interface)
+    validate_provided_class(B @ choose_b, expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B @ choose_b, expected=Interface)
+
+
+def test_validate_provided_class_factory():
+    class Interface:
+        pass
+
+    class A(Interface):
+        pass
+
+    class B:
+        pass
+
+    with world.test.new():
+        @factory
+        def build_a() -> A:
+            return A()
+
+        @factory
+        def build_b() -> B:
+            return B()
+
+        validate_provided_class(A @ build_a, expected=Interface)
+        validate_provided_class(B @ build_b, expected=B)
+        with pytest.raises(TypeError):
+            validate_provided_class(B @ build_b, expected=Interface)
+
+        validate_provided_class(A @ build_a.with_kwargs(a=1), expected=Interface)
+        validate_provided_class(B @ build_b.with_kwargs(a=1), expected=B)
+        with pytest.raises(TypeError):
+            validate_provided_class(B @ build_b.with_kwargs(a=1), expected=Interface)

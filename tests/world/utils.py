@@ -1,6 +1,6 @@
 from typing import Hashable, Optional
 
-from antidote.core import (Container, DependencyInstance, Provider)
+from antidote.core import (Container, DependencyValue, Provider)
 
 
 class DummyIntProvider(Provider[int]):
@@ -12,8 +12,8 @@ class DummyIntProvider(Provider[int]):
         return isinstance(dependency, int)
 
     def provide(self, dependency: int, container: Container
-                ) -> Optional[DependencyInstance]:
-        return DependencyInstance(dependency * 2)
+                ) -> Optional[DependencyValue]:
+        return DependencyValue(dependency * 2)
 
     def clone(self, keep_singletons_cache: bool):
         p = DummyIntProvider()

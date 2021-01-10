@@ -3,7 +3,7 @@ import pytest
 from antidote import world
 from antidote._internal.utils import short_id
 from antidote._providers import Tag, Tagged, TagProvider
-from antidote.core import DependencyInstance
+from antidote.core import DependencyValue
 from antidote.exceptions import (DependencyNotFoundError, DuplicateTagError,
                                  FrozenWorldError)
 
@@ -127,17 +127,17 @@ def test_provide_tags():
         provider.register('test2', tags=[tagB])
 
         result = world.test.maybe_provide_from(provider, tagA)
-        assert isinstance(result, DependencyInstance)
+        assert isinstance(result, DependencyValue)
         assert not result.is_singleton()
-        tagged_dependencies: Tagged = result.value
+        tagged_dependencies: Tagged = result.unwrapped
         assert len(tagged_dependencies) == 1
         assert set(tagged_dependencies.tags()) == {tagA}
         assert {world.get('test')} == set(tagged_dependencies.values())
 
         result = world.test.maybe_provide_from(provider, tagB)
-        assert isinstance(result, DependencyInstance)
+        assert isinstance(result, DependencyValue)
         assert not result.is_singleton()
-        tagged_dependencies: Tagged = result.value
+        tagged_dependencies: Tagged = result.unwrapped
         assert len(tagged_dependencies) == 2
         assert {(tagB, world.get('test')),
                 (tagB, world.get('test2'))} == set(tagged_dependencies.items())
@@ -180,20 +180,17 @@ def test_custom_tags(provider: TagProvider):
 def test_duplicate_tag_error(provider: TagProvider):
     tag = Tag()
 
-    with world.test.clone():
-        provider = world.get(TagProvider)
+    provider.register('test', tags=[tag])
+    with pytest.raises(DuplicateTagError) as exc_info:
         provider.register('test', tags=[tag])
-        with pytest.raises(DuplicateTagError) as exc_info:
-            provider.register('test', tags=[tag])
-        # short_id being base64 can contain the chars '+/' which interfere with regex
-        # matching.
-        assert short_id(tag) in str(exc_info.value)
+    # short_id being base64 can contain the chars '+/' which interfere with regex
+    # matching.
+    assert short_id(tag) in str(exc_info.value)
 
-    with world.test.clone():
-        provider = world.get(TagProvider)
-        with pytest.raises(DuplicateTagError) as exc_info:
-            provider.register('test', tags=[tag, tag])
-        assert short_id(tag) in str(exc_info.value)
+    provider = world.get(TagProvider)
+    with pytest.raises(DuplicateTagError) as exc_info:
+        provider.register('test2', tags=[tag, tag])
+    assert short_id(tag) in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -235,8 +232,8 @@ def test_copy(provider: TagProvider,
     with pytest.raises(DuplicateTagError):
         cloned.register('test', tags=[tag])
 
-    assert list(world.test.maybe_provide_from(cloned, tag).value.tags()) == [tag]
-    assert list(world.test.maybe_provide_from(cloned, tag).value.values()) == [
+    assert list(world.test.maybe_provide_from(cloned, tag).unwrapped.tags()) == [tag]
+    assert list(world.test.maybe_provide_from(cloned, tag).unwrapped.values()) == [
         world.get('test')]
 
     tag2 = Tag()

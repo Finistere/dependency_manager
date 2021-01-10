@@ -606,17 +606,17 @@ default they are NOT kept, but you can change that behavior:
     ['en', 'fr']
 
 
-While Antidote does not accept support overriding dependencies, you may do it in tests:
+While Antidote does not support overriding dependencies, you may do it in tests:
 
 .. doctest:: tutorial_test_debug
 
     >>> with world.test.clone():
-    ...     # This fails because MyService already exists as a dependency
-    ...     world.singletons.add(MyService, MyService())
+    ...     # This fails because new dependencies cannot be defined inside clone()
+    ...     world.singletons.add("test", 1)
     Traceback (most recent call last):
     ...
-    DuplicateDependencyError
-    >>> with world.test.clone(overridable=True):
+    FrozenWorldError
+    >>> with world.test.clone():
     ...     test_service = MyService()
     ...     world.test.override.singleton(MyService, test_service)
     ...     assert world.get[MyService]() is test_service

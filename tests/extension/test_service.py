@@ -67,24 +67,22 @@ def test_singleton():
 def test_custom_scope():
     dummy_scope = world.scopes.new('dummy')
 
-    with world.test.clone():
-        class Scoped(Service):
-            __antidote__ = Service.Conf(scope=dummy_scope)
+    class Scoped(Service):
+        __antidote__ = Service.Conf(scope=dummy_scope)
 
-        my_service = world.get(Scoped)
-        assert world.get(Scoped) is my_service
-        world.scopes.reset(dummy_scope)
-        assert world.get(Scoped) is not my_service
+    my_service = world.get(Scoped)
+    assert world.get(Scoped) is my_service
+    world.scopes.reset(dummy_scope)
+    assert world.get(Scoped) is not my_service
 
-    with world.test.clone():
-        @service(scope=dummy_scope)
-        class Scoped:
-            pass
+    @service(scope=dummy_scope)
+    class Scoped:
+        pass
 
-        my_service = world.get(Scoped)
-        assert world.get(Scoped) is my_service
-        world.scopes.reset(dummy_scope)
-        assert world.get(Scoped) is not my_service
+    my_service = world.get(Scoped)
+    assert world.get(Scoped) is my_service
+    world.scopes.reset(dummy_scope)
+    assert world.get(Scoped) is not my_service
 
 
 def test_duplicate_registration():

@@ -1,6 +1,6 @@
 import pytest
 
-from antidote.core.container import (DependencyInstance, OverridableRawContainer,
+from antidote.core.container import (DependencyValue, OverridableRawContainer,
                                      RawContainer, Scope)
 from antidote.exceptions import (DependencyCycleError, DependencyInstantiationError,
                                  DependencyNotFoundError)
@@ -18,14 +18,14 @@ def original_container():
 
 @pytest.fixture
 def container(original_container):
-    return OverridableRawContainer.from_clone(
-        original_container.clone(keep_singletons=True, keep_scopes=False))
+    return original_container.clone(keep_singletons=True,
+                                    keep_scopes=False)
 
 
 @pytest.mark.parametrize('keep_singletons', [True, False])
 def test_build(original_container: RawContainer, keep_singletons: bool):
-    container = OverridableRawContainer.from_clone(
-        original_container.clone(keep_singletons=keep_singletons, keep_scopes=False))
+    container = original_container.clone(keep_singletons=keep_singletons,
+                                         keep_scopes=False)
     assert container.get('name') == "Antidote"
     if keep_singletons:
         assert container.get('singleton') == 'yes'
@@ -43,8 +43,8 @@ def test_override_singletons(container: OverridableRawContainer):
         assert container.get(dep) == 'different'
         container.override_singletons({dep: 'different-v2'})
         assert container.get(dep) == 'different-v2'
-        assert container.provide(dep) == DependencyInstance('different-v2',
-                                                            scope=Scope.singleton())
+        assert container.provide(dep) == DependencyValue('different-v2',
+                                                         scope=Scope.singleton())
 
 
 def test_override_factory(container: OverridableRawContainer):
@@ -56,8 +56,8 @@ def test_override_factory(container: OverridableRawContainer):
         assert container.get(dep) == 'different'
         container.override_factory(dep, factory=lambda: 'different-v2', scope=None)
         assert container.get(dep) == 'different-v2'
-        assert container.provide(dep) == DependencyInstance('different-v2',
-                                                            scope=None)
+        assert container.provide(dep) == DependencyValue('different-v2',
+                                                         scope=None)
 
         # overriding previous factory which had no scope
         container.override_factory(dep, factory=lambda: object(), scope=Scope.singleton())
@@ -79,28 +79,28 @@ def test_override_provider(container: OverridableRawContainer):
 
     for dep in ['name', 'singleton']:
         container.override_provider(
-            lambda x: DependencyInstance('different') if x == dep else None)
+            lambda x: DependencyValue('different') if x == dep else None)
         assert container.get(dep) == 'different'
         container.override_provider(
-            lambda x: DependencyInstance('different-v2') if x == dep else None)
+            lambda x: DependencyValue('different-v2') if x == dep else None)
         assert container.get(dep) == 'different-v2'
-        assert container.provide(dep) == DependencyInstance('different-v2',
-                                                            scope=None)
+        assert container.provide(dep) == DependencyValue('different-v2',
+                                                         scope=None)
 
         with pytest.raises(DependencyNotFoundError):
             container.get('x')  # new provider does not bring any other value
 
         # overriding previous provider which had no scope
         container.override_provider(
-            lambda x: DependencyInstance(object(),
-                                         scope=Scope.singleton()) if x == dep else None)
+            lambda x: DependencyValue(object(),
+                                      scope=Scope.singleton()) if x == dep else None)
         value = container.get(dep)
         assert not isinstance(value, str)
         assert container.get(dep) is value
 
         container.override_provider(
-            lambda x: DependencyInstance(object(),
-                                         scope=Scope.singleton()) if x == dep else None)
+            lambda x: DependencyValue(object(),
+                                      scope=Scope.singleton()) if x == dep else None)
         # didn't change anything, because it's now a singleton.
         assert container.get(dep) is value
 

@@ -8,23 +8,22 @@ following:
 .. doctest:: world_override
 
     >>> from antidote import world
-    >>> with world.test.clone(overridable=True):
+    >>> with world.test.clone():
     ...     world.test.override.singleton('test', 1)
     ...     # Override a second time a singleton
     ...     world.test.override.singleton('test', 1)
-    ...     # Declaring normally the same singleton afterwards
-    ...     # won't raise any errors.
-    ...     world.singletons.add('test', 1)
+    ...     world.get[int]("test")
+    1
 
 .. note::
 
-    Overrides works as a layer on top of the usual dependencies. So while they don't
-    interfer with latter, they can interfer with each other.
+    Overrides works as a layer on top of the usual dependencies. So they can interfer
+    with each other.
 
     .. doctest:: world_override
 
         >>> from antidote import world
-        >>> with world.test.clone(overridable=True):
+        >>> with world.test.clone():
         ...     world.test.override.singleton('test', 1)
         ...     # 'test' is already a singleton in the override layer, so the factory
         ...     # won't be taken into account.

@@ -68,12 +68,12 @@ def test_lazy():
 
     lazy = world.lazy('x')
     assert isinstance(lazy, Dependency)
-    assert lazy.value == 'x'
+    assert lazy.unwrapped == 'x'
     assert lazy.get() == world.get('x')
 
     lazy = world.lazy[int]('x')
     assert isinstance(lazy, Dependency)
-    assert lazy.value == 'x'
+    assert lazy.unwrapped == 'x'
     assert lazy.get() == world.get('x')
     assert world.lazy[A]().get() is world.get(A)
 

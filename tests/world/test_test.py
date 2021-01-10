@@ -4,7 +4,8 @@ import pytest
 
 from antidote import world
 from antidote._providers import ServiceProvider
-from antidote.core import (Container, DependencyInstance, StatelessProvider)
+from antidote.core import (Container, DependencyValue, StatelessProvider)
+from antidote.core.exceptions import FrozenWorldError
 from antidote.exceptions import DependencyNotFoundError
 from .utils import DummyIntProvider
 
@@ -31,15 +32,7 @@ def empty_world():
     pytest.param(lambda: world.test.clone(keep_singletons=True),
                  True,
                  'clone',
-                 id='clone-with-singletons'),
-    pytest.param(lambda: world.test.clone(overridable=True),
-                 False,
-                 'overridable',
-                 id='clone-overridable'),
-    pytest.param(lambda: world.test.clone(keep_singletons=True, overridable=True),
-                 True,
-                 'overridable',
-                 id='clone-overridable-with-singletons')
+                 id='clone-with-singletons')
 ])
 def test_world(context: Callable, keeps_singletons: bool, strategy: str):
     class DummyFloatProvider(StatelessProvider[float]):
@@ -47,8 +40,8 @@ def test_world(context: Callable, keeps_singletons: bool, strategy: str):
             return isinstance(dependency, float)
 
         def provide(self, dependency: float, container: Container
-                    ) -> Optional[DependencyInstance]:
-            return DependencyInstance(dependency ** 2)
+                    ) -> Optional[DependencyValue]:
+            return DependencyValue(dependency ** 2)
 
     x = object()
     y = object()
@@ -66,7 +59,7 @@ def test_world(context: Callable, keeps_singletons: bool, strategy: str):
         if strategy == 'new':
             assert isinstance(world.get[DummyIntProvider](), DummyIntProvider)
             assert world.get(DummyIntProvider).original is None
-        elif strategy in {'clone', 'overridable'}:
+        elif strategy == 'clone':
             assert isinstance(world.get(DummyIntProvider), DummyIntProvider)
             assert world.get(DummyIntProvider) is not provider
             assert world.get(DummyIntProvider).original is provider
@@ -76,9 +69,10 @@ def test_world(context: Callable, keeps_singletons: bool, strategy: str):
             with pytest.raises(DependencyNotFoundError):
                 world.get(ServiceProvider)
 
-        world.singletons.add("y", y)
+        if strategy != 'clone':
+            world.singletons.add("y", y)
+            assert world.get('y') is y
 
-        if strategy not in {'clone', 'overridable'}:
             world.provider(DummyFloatProvider)
             assert world.get(1.2) == 1.2 ** 2
 
@@ -100,34 +94,28 @@ def test_clone_keep_singletons():
     world.provider(DummyIntProvider)
 
     with world.test.clone(keep_singletons=True):
-        world.singletons.add("a", 3)
         assert world.get("singleton") == 2
-        assert world.get("a") == 3
         assert world.get(10) == 20
 
     with world.test.clone(keep_singletons=False):
-        world.singletons.add("a", 3)
-        assert world.get("a") == 3
         with pytest.raises(DependencyNotFoundError):
             world.get("singleton")
         assert world.get(10) == 20
 
-    with pytest.raises(DependencyNotFoundError):
-        world.get("a")
 
-
-@pytest.mark.parametrize('overridable', [True, False])
 @pytest.mark.parametrize('keep_singletons', [True, False])
 @pytest.mark.parametrize('keep_scopes', [True, False])
-def test_clone_restrictions(overridable, keep_singletons, keep_scopes):
-    with world.test.clone(overridable=overridable,
-                          keep_singletons=keep_singletons,
+def test_clone_restrictions(keep_singletons, keep_scopes):
+    with world.test.clone(keep_singletons=keep_singletons,
                           keep_scopes=keep_scopes):
-        with pytest.raises(RuntimeError, match=".*cloned.*"):
+        with pytest.raises(FrozenWorldError):
             world.scopes.new("new scope")
 
-        with pytest.raises(RuntimeError, match=".*cloned.*"):
+        with pytest.raises(FrozenWorldError):
             world.provider(DummyIntProvider)
+
+        with pytest.raises(FrozenWorldError):
+            world.singletons.add('test', 1)
 
 
 def test_deep_clone():
@@ -171,19 +159,13 @@ def test_new():
             world.get("singleton")
         assert world.get(10) == 20
 
-    with world.test.new(raw=True):
-        with pytest.raises(DependencyNotFoundError):
-            world.get(DummyIntProvider)
-
-        assert isinstance(world.get(ServiceProvider), ServiceProvider)
-
     with pytest.raises(DependencyNotFoundError):
         world.get("a")
 
 
 def test_provide_from():
     provider = DummyIntProvider()
-    assert world.test.maybe_provide_from(provider, 10) == DependencyInstance(20)
+    assert world.test.maybe_provide_from(provider, 10) == DependencyValue(20)
     assert world.test.maybe_provide_from(provider, "1") is None
 
     world.provider(DummyIntProvider)

@@ -5,7 +5,7 @@ from typing import (Any, Dict, Generic, Hashable, Iterable, Iterator, List,
 from .._compatibility.typing import final
 from .._internal import API
 from .._internal.utils import debug_repr, short_id
-from ..core import Container, DependencyDebug, DependencyInstance, Provider
+from ..core import Container, DependencyDebug, DependencyValue, Provider
 from ..core.exceptions import AntidoteError
 
 
@@ -201,7 +201,7 @@ class TagProvider(Provider[Tag]):
         )
 
     def maybe_provide(self, dependency: Hashable, container: Container
-                      ) -> Optional[DependencyInstance]:
+                      ) -> Optional[DependencyValue]:
         if not isinstance(dependency, Tag):
             return None
 
@@ -210,7 +210,7 @@ class TagProvider(Provider[Tag]):
         except KeyError:
             return None
 
-        return DependencyInstance(
+        return DependencyValue(
             Tagged(
                 container=container,
                 dependencies=list(tagged.keys()),

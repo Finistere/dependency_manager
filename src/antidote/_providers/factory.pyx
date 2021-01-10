@@ -141,7 +141,7 @@ cdef class FactoryProvider(FastProvider):
                 self.__factories[factory_dependency] = Factory.__new__(
                     Factory,
                     header,
-                    dependency=factory.value
+                    dependency=factory.unwrapped
                 )
             elif callable(factory):
                 self.__factories[factory_dependency] = Factory.__new__(

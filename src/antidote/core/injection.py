@@ -19,10 +19,9 @@ class Arg(FinalImmutable):
     """
     __slots__ = ('name', 'type_hint')
     name: str
+    """Name of the argument"""
     type_hint: Any
-
-    def __init__(self, name: str, type_hint: Any) -> None:
-        super().__init__(name=name, type_hint=type_hint)
+    """Type hint of the argument if any"""
 
 
 # This type is experimental.
@@ -165,7 +164,7 @@ def inject(func: AnyF = None,
                           use_type_hints=use_type_hints)
 
 
-@API.experimental  # Function will be kept in sync with @inject, so you may use it.
+@API.public  # Function will be kept in sync with @inject, so you may use it.
 def validate_injection(dependencies: DEPENDENCIES_TYPE = None,
                        use_names: Union[bool, Iterable[str]] = None,
                        use_type_hints: Union[bool, Iterable[str]] = None) -> None:

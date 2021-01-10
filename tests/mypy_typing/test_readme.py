@@ -46,7 +46,7 @@ def test_readme():
     to retrieve the best movies. In our case the implementation uses IMDB
     to dot it.
     """
-    from antidote import Constants, factory, Implementation, inject, world, const
+    from antidote import Constants, factory, inject, world, const, Service, implementation
 
     class MovieDB:
         """ Interface """
@@ -92,10 +92,13 @@ def test_readme():
         # Here host = Conf().get('imdb.host')
         return ImdbAPI(host=host, port=port, api_key=api_key)
 
-    # When requesting MovieDB, a IMDBMovieDB instance will be provided.
-    class IMDBMovieDB(MovieDB, Implementation):
+    @implementation(MovieDB)
+    def current_movie_db():
+        return IMDBMovieDB
+
+    class IMDBMovieDB(MovieDB, Service):
         # New instance each time
-        __antidote__ = Implementation.Conf(singleton=False)
+        __antidote__ = Service.Conf(singleton=False)
 
         @inject(dependencies={'imdb_api': ImdbAPI @ imdb_factory})
         def __init__(self, imdb_api: ImdbAPI):
@@ -104,7 +107,7 @@ def test_readme():
         def get_best_movies(self):
             pass
 
-    @inject
+    @inject(dependencies=[MovieDB @ current_movie_db])
     def f(movie_db: MovieDB = None):
         assert movie_db is not None  # for Mypy
         pass
@@ -121,7 +124,7 @@ def test_readme():
     )))
 
     # When testing you can also override locally some dependencies:
-    with world.test.clone(overridable=True, keep_singletons=True):
+    with world.test.clone(keep_singletons=True):
         world.test.override.singleton(Conf.IMDB_HOST, 'other host')
         f()
 
@@ -144,7 +147,7 @@ def test_readme():
                     └── Const: Conf.IMDB_HOST
                         └── Conf
                             └── Singleton: 'conf_path' -> '/etc/app.conf'
-    
+
     Singletons have no scope markers.
     <∅> = no scope (new instance each time)
     <name> = custom scope

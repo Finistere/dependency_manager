@@ -36,13 +36,15 @@ cdef class Scope:
         readonly str name
         ScopeId id
 
-cdef class DependencyInstance:
+cdef class DependencyValue:
     cdef:
-        readonly bint singleton
-        readonly object value
+        readonly object unwrapped
         readonly Scope scope
 
     cdef to_result(self, DependencyResult *result)
+
+    @staticmethod
+    cdef DependencyValue from_result(RawContainer container, DependencyResult *result)
 
 cdef class Container:
     pass

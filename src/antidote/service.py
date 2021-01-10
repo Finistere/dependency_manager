@@ -33,8 +33,7 @@ class Service(metaclass=ServiceMeta, abstract=True):
 
         >>> from antidote import Service, world
         >>> class MyService(Service):
-        ...     __antidote__ = Service.Conf(singleton=False) \\
-        ...         .with_wiring(use_names=True)
+        ...     __antidote__ = Service.Conf(singleton=False)
 
     One can customize the instantiation and use the same service with different
     configuration:
@@ -93,7 +92,12 @@ class Service(metaclass=ServiceMeta, abstract=True):
                     method name, in which case only the latter would be wired. To
                     deactivate any wiring at all use :py:obj:`None`.
                 singleton: Whether the service is a singleton or not. A singleton is
-                    instantiated only once. Defaults to :py:obj:`True`
+                    instantiated only once. Mutually exclusive with :code:`scope`.
+                    Defaults to :py:obj:`True`
+                scope: Scope of the service. Mutually exclusive with :code:`singleton`.
+                    The scope defines if and how long the service will be cached. See
+                    :py:class:`~.core.container.Scope`. Defaults to
+                    :py:meth:`~.core.container.Scope.singleton`.
                 tags: Iterable of :py:class:`~.._providers.tag.Tag` tagging to the
                       service.
             """
@@ -157,8 +161,8 @@ def service(klass: C = None,
     Register a service: the class itself is the dependency. Prefer using
     :py:class:`.Service` when possible, it provides more features such as
     :py:meth:`.Service.with_kwargs` and wiring. This decorator is intended for
-    registration of class which cannot inherit :py:class:`.Service`. No changes will
-    on the class.
+    registration of class which cannot inherit :py:class:`.Service`. The class itself
+    will not be modified.
 
     .. doctest:: helpers_register
 
@@ -176,11 +180,17 @@ def service(klass: C = None,
     Args:
         klass: Class to register as a dependency. It will be instantiated  only when
             requested.
-        singleton: If True, the service will be a singleton and instantiated only once.
+        singleton: Whether the service is a singleton or not. A singleton is
+            instantiated only once. Mutually exclusive with :code:`scope`.
+            Defaults to :py:obj:`True`
+        scope: Scope of the service. Mutually exclusive with :code:`singleton`.
+            The scope defines if and how long the service will be cached. See
+            :py:class:`~.core.container.Scope`. Defaults to
+            :py:meth:`~.core.container.Scope.singleton`.
         tags: Iterable of :py:class:`~.._providers.tag.Tag` applied to the service.
 
     Returns:
-        The class or the class decorator.
+        The decorated class, unmodified, if specified or the class decorator.
 
     """
     scope = validated_scope(scope, singleton, default=Scope.singleton())

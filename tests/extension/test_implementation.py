@@ -1,6 +1,6 @@
 import pytest
 
-from antidote import factory, implementation, Implementation, Service, world
+from antidote import factory, implementation, Service, world
 from antidote._providers import (FactoryProvider, IndirectProvider,
                                  ServiceProvider)
 from antidote.exceptions import DependencyInstantiationError
@@ -19,13 +19,6 @@ class Interface:
     pass
 
 
-def test_implementation_class():
-    class A(Interface, Implementation):
-        pass
-
-    assert world.get(Interface) is world.get(A)
-
-
 def test_default_implementation():
     class A(Interface, Service):
         pass
@@ -39,10 +32,10 @@ def test_default_implementation():
     def choose():
         return dict(a=A, b=B)[choice]
 
-    assert world.get(Interface) is world.get(A)
+    assert world.get(Interface @ choose) is world.get(A)
     choice = 'b'
     assert choose() is B
-    assert world.get(Interface) is world.get(A)
+    assert world.get(Interface @ choose) is world.get(A)
 
 
 @pytest.mark.parametrize('singleton,permanent',
@@ -60,69 +53,54 @@ def test_implementation(singleton: bool, permanent: bool):
     def choose_service():
         return dict(a=A, b=B)[choice]
 
-    assert isinstance(world.get(Interface), A)
-    assert (world.get(Interface) is world.get(A)) is singleton
+    dependency = Interface @ choose_service
+    assert isinstance(world.get(dependency), A)
+    assert (world.get(dependency) is world.get(A)) is singleton
 
     choice = 'b'
     assert choose_service() == B
     if permanent:
-        assert isinstance(world.get(Interface), A)
-        assert (world.get(Interface) is world.get(A)) is singleton
+        assert isinstance(world.get(dependency), A)
+        assert (world.get(dependency) is world.get(A)) is singleton
     else:
-        assert isinstance(world.get(Interface), B)
-        assert (world.get(Interface) is world.get(B)) is singleton
+        assert isinstance(world.get(dependency), B)
+        assert (world.get(dependency) is world.get(B)) is singleton
 
 
-def test_implementation_integration():
+def test_implementation_with_service():
     x = object()
 
-    with world.test.clone():
-        class A(Interface, Service):
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
+    class A(Interface, Service):
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
 
-        @implementation(Interface)
-        def impl():
-            return A.with_kwargs(test=x)
+    @implementation(Interface)
+    def impl():
+        return A.with_kwargs(test=x)
 
-        a = world.get(Interface)
-        assert isinstance(a, A)
-        assert a.kwargs == dict(test=x)
-
-    with world.test.clone():
-        class A(Interface):
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        @factory
-        def build_a(**kwargs) -> A:
-            return A(**kwargs)
-
-        @implementation(Interface)
-        def impl2():
-            return A @ build_a.with_kwargs(test=x)
-
-        a = world.get(Interface)
-        assert isinstance(a, A)
-        assert a.kwargs == dict(test=x)
+    a = world.get(Interface @ impl)
+    assert isinstance(a, A)
+    assert a.kwargs == dict(test=x)
 
 
-def test_invalid_implementation_class():
-    with pytest.raises(TypeError):
-        class A(Implementation):
-            pass
+def test_implementation_with_factory():
+    x = object()
 
-    with pytest.raises(TypeError):
-        class B(Implementation, Interface):
-            pass
+    class A(Interface):
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
 
-    with pytest.raises(TypeError):
-        class C(Interface, Implementation, Implementation):
-            pass
+    @factory
+    def build_a(**kwargs) -> A:
+        return A(**kwargs)
 
-    with pytest.raises(ValueError):
-        class D(Interface, Implementation, abstract=True):
-            pass
+    @implementation(Interface)
+    def impl2():
+        return A @ build_a.with_kwargs(test=x)
+
+    a = world.get(Interface @ impl2)
+    assert isinstance(a, A)
+    assert a.kwargs == dict(test=x)
 
 
 def dummy_choose():
@@ -163,27 +141,30 @@ def test_invalid_implementation_return_type():
         pass
 
     world.singletons.add(B, 1)
-    world.singletons.add(1, 1)
 
-    with world.test.clone(keep_singletons=True):
+    with world.test.new():
+        world.singletons.add(1, 1)
+
         @implementation(Interface)
         def choose():
             return 1
 
         world.get(1)
         with pytest.raises(DependencyInstantiationError):
-            world.get(Interface)
+            world.get(Interface @ choose)
 
-    with world.test.clone(keep_singletons=True):
+    with world.test.new():
+        world.singletons.add(B, 1)
+
         @implementation(Interface)
         def choose2():
             return B
 
         world.get(B)
         with pytest.raises(DependencyInstantiationError):
-            world.get(Interface)
+            world.get(Interface @ choose2)
 
-    with world.test.clone():
+    with world.test.new():
         class C(Service):
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
@@ -194,9 +175,9 @@ def test_invalid_implementation_return_type():
 
         world.get(C.with_kwargs(test=1))
         with pytest.raises(DependencyInstantiationError):
-            world.get(Interface)
+            world.get(Interface @ impl)
 
-    with world.test.clone():
+    with world.test.new():
         class D:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
@@ -211,4 +192,38 @@ def test_invalid_implementation_return_type():
 
         world.get(D @ build_d.with_kwargs(test=1))
         with pytest.raises(DependencyInstantiationError):
-            world.get(Interface)
+            world.get(Interface @ impl2)
+
+
+def test_invalid_implementation_dependency():
+    class Interface:
+        pass
+
+    class A(Interface, Service):
+        pass
+
+    @implementation(Interface)
+    def current_interface():
+        return A
+
+    with pytest.raises(ValueError, match=".*interface.*"):
+        A @ current_interface
+
+
+def test_getattr():
+    class Interface:
+        pass
+
+    class A(Interface, Service):
+        pass
+
+    def current_interface():
+        return A
+
+    current_interface.hello = 'world'
+
+    build = implementation(Interface)(current_interface)
+    assert build.hello == 'world'
+
+    build.new_hello = 'new_world'
+    assert build.new_hello == 'new_world'

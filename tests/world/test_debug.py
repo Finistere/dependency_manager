@@ -1,6 +1,6 @@
 import textwrap
 
-from antidote import (const, Constants, factory, Implementation, implementation, inject,
+from antidote import (const, Constants, factory, implementation, inject,
                       LazyCall, LazyMethodCall, Service, Tag, world)
 from antidote._internal.utils import raw_getattr, short_id
 
@@ -40,50 +40,78 @@ def test_no_debug():
     )
 
 
+def test_implicits_debug():
+    prefix = "tests.world.test_debug.test_implicits_debug.<locals>"
+
+    with world.test.new():
+        class Interface:
+            pass
+
+        class Dummy(Interface, Service):
+            pass
+
+        world.implicits.set({Interface: Dummy})
+
+        assert_valid(
+            DebugTestCase(
+                value=Interface,
+                expected=f"""
+                Implicit: {prefix}.Interface -> {prefix}.Dummy
+                └── {prefix}.Dummy
+                    """,
+            )
+        )
+
+
 def test_implementation_debug():
     class Interface:
         pass
 
-    class Dummy(Interface, Service):
-        pass
-
     prefix = "tests.world.test_debug.test_implementation_debug.<locals>"
 
-    with world.test.clone():
+    with world.test.new():
+        class Dummy(Interface, Service):
+            pass
+
         @implementation(Interface)
         def f():
             return Dummy
 
         assert_valid(DebugTestCase(
-            value=Interface,
+            value=Interface @ f,
             expected=f"""
-                Permanent link: {prefix}.Interface -> ??? defined by {prefix}.f
-                    """
-        ))
-
-        world.get(Interface)
-        assert_valid(DebugTestCase(
-            value=Interface,
-            expected=f"""
-                Permanent link: {prefix}.Interface -> {prefix}.Dummy defined by {prefix}.f
+                Permanent implementation: {prefix}.Interface @ {prefix}.f
                 └── {prefix}.Dummy
                     """
         ))
 
-    with world.test.clone():
+        world.get(Interface @ f)
+        assert_valid(DebugTestCase(
+            value=Interface @ f,
+            expected=f"""
+                Permanent implementation: {prefix}.Interface @ {prefix}.f
+                └── {prefix}.Dummy
+                    """
+        ))
+
+    with world.test.new():
+        class Dummy2(Interface, Service):
+            pass
+
         undefined_expectations = f"""
-            <∅> Dynamic link: {prefix}.Interface -> ??? defined by {prefix}.g
+            <∅> Implementation: {prefix}.Interface @ {prefix}.g
+            └── {prefix}.Dummy2
         """
 
         @implementation(Interface, permanent=False)
         def g():
-            return Dummy
+            return Dummy2
 
-        assert_valid(DebugTestCase(value=Interface,
+        assert_valid(DebugTestCase(value=Interface @ g,
                                    expected=undefined_expectations))
 
-        world.get(Interface)
-        assert_valid(DebugTestCase(value=Interface,
+        world.get(Interface @ g)
+        assert_valid(DebugTestCase(value=Interface @ g,
                                    expected=undefined_expectations))
 
 
@@ -399,11 +427,16 @@ def test_complex_debug():
         def build_s2(service1: Service1) -> Service2:
             return Service2(service1)
 
+        @implementation(Interface)
+        def impl():
+            return Service4
+
         class Service3(Service):
             __antidote__ = Service.Conf(singleton=False,
                                         tags=[tag]).with_wiring(
                 methods=['__init__', 'get'],
                 dependencies=dict(
+                    i=Interface @ impl,
                     service2=Service2 @ build_s2))
 
             def __init__(self,
@@ -419,8 +452,8 @@ def test_complex_debug():
 
             X = LazyMethodCall(get)
 
-        class Service4(Interface, Implementation):
-            __antidote__ = Implementation.Conf(tags=[tag]).with_wiring(
+        class Service4(Interface, Service):
+            __antidote__ = Service.Conf(tags=[tag]).with_wiring(
                 dependencies=dict(service2=Service2 @ build_s2))
 
             def __init__(self, service1: Service1, service2: Service2,
@@ -466,7 +499,7 @@ def test_complex_debug():
                     │   ├── {prefix}.Service2 @ {prefix}.build_s2
                     │   └── {prefix}.Service1
                     └──<∅> {prefix}.Service3
-                        ├── Static link: {prefix}.Interface -> {prefix}.Service4
+                        ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                         ├── {prefix}.Service2 @ {prefix}.build_s2
                         └── {prefix}.Service1
                         """
@@ -475,71 +508,71 @@ def test_complex_debug():
                 value=tag,
                 depth=3,
                 expected=f"""
-                    <∅> Tag: Tag#{short_id(tag)}
-                    ├── {prefix}.Service4
-                    │   ├──<∅> {prefix}.Service3
-                    │   │   ├── Static link: {prefix}.Interface -> {prefix}.Service4
-                    │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   │   └── {prefix}.Service1
-                    │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   │   └── {prefix}.build_s2
-                    │   │       └── {prefix}.Service1
-                    │   └── {prefix}.Service1
-                    └──<∅> {prefix}.Service3
-                        ├── Static link: {prefix}.Interface -> {prefix}.Service4
-                        │   └── {prefix}.Service4
-                        ├── {prefix}.Service2 @ {prefix}.build_s2
-                        │   └── {prefix}.build_s2
-                        │       └── {prefix}.Service1
-                        └── {prefix}.Service1
+                <∅> Tag: Tag#{short_id(tag)}
+                ├── {prefix}.Service4
+                │   ├──<∅> {prefix}.Service3
+                │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
+                │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                │   │   └── {prefix}.Service1
+                │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                │   │   └── {prefix}.build_s2
+                │   │       └── {prefix}.Service1
+                │   └── {prefix}.Service1
+                └──<∅> {prefix}.Service3
+                    ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
+                    │   └── {prefix}.Service4
+                    ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │   └── {prefix}.build_s2
+                    │       └── {prefix}.Service1
+                    └── {prefix}.Service1
                         """
             ),
             DebugTestCase(
                 value=tag,
                 expected=f"""
-                    <∅> Tag: Tag#{short_id(tag)}
-                    ├── {prefix}.Service4
-                    │   ├──<∅> {prefix}.Service3
-                    │   │   ├── Static link: {prefix}.Interface -> {prefix}.Service4
-                    │   │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
-                    │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   │   │   └── {prefix}.build_s2
-                    │   │   │       └── {prefix}.Service1
-                    │   │   └── {prefix}.Service1
-                    │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   │   └── {prefix}.build_s2
-                    │   │       └── {prefix}.Service1
-                    │   └── {prefix}.Service1
-                    └──<∅> {prefix}.Service3
-                        ├── Static link: {prefix}.Interface -> {prefix}.Service4
-                        │   └── {prefix}.Service4
-                        │       ├── /!\\ Cyclic dependency: {prefix}.Service3
-                        │       ├── {prefix}.Service2 @ {prefix}.build_s2
-                        │       │   └── {prefix}.build_s2
-                        │       │       └── {prefix}.Service1
-                        │       └── {prefix}.Service1
-                        ├── {prefix}.Service2 @ {prefix}.build_s2
-                        │   └── {prefix}.build_s2
-                        │       └── {prefix}.Service1
-                        └── {prefix}.Service1
+                <∅> Tag: Tag#{short_id(tag)}
+                ├── {prefix}.Service4
+                │   ├──<∅> {prefix}.Service3
+                │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
+                │   │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
+                │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                │   │   │   └── {prefix}.build_s2
+                │   │   │       └── {prefix}.Service1
+                │   │   └── {prefix}.Service1
+                │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                │   │   └── {prefix}.build_s2
+                │   │       └── {prefix}.Service1
+                │   └── {prefix}.Service1
+                └──<∅> {prefix}.Service3
+                    ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
+                    │   └── {prefix}.Service4
+                    │       ├── /!\\ Cyclic dependency: {prefix}.Service3
+                    │       ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │       │   └── {prefix}.build_s2
+                    │       │       └── {prefix}.Service1
+                    │       └── {prefix}.Service1
+                    ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │   └── {prefix}.build_s2
+                    │       └── {prefix}.Service1
+                    └── {prefix}.Service1
                         """
             ),
             DebugTestCase(
                 value=f,
                 expected=f"""
-                    {prefix}.f
-                    └── {prefix}.Service4
-                        ├──<∅> {prefix}.Service3
-                        │   ├── Static link: {prefix}.Interface -> {prefix}.Service4
-                        │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
-                        │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                        │   │   └── {prefix}.build_s2
-                        │   │       └── {prefix}.Service1
-                        │   └── {prefix}.Service1
-                        ├── {prefix}.Service2 @ {prefix}.build_s2
-                        │   └── {prefix}.build_s2
-                        │       └── {prefix}.Service1
-                        └── {prefix}.Service1
+                {prefix}.f
+                └── {prefix}.Service4
+                    ├──<∅> {prefix}.Service3
+                    │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
+                    │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
+                    │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │   │   └── {prefix}.build_s2
+                    │   │       └── {prefix}.Service1
+                    │   └── {prefix}.Service1
+                    ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │   └── {prefix}.build_s2
+                    │       └── {prefix}.Service1
+                    └── {prefix}.Service1
                         """
             ),
             DebugTestCase(

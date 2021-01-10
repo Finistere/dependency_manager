@@ -19,6 +19,13 @@ world
     .. autodata:: lazy
 
 
+world.scopes
+------------
+
+.. automodule:: antidote.world.scopes
+    :members:
+
+
 world.singletons
 ----------------
 
@@ -112,7 +119,7 @@ Injection
 .. automodule:: antidote.core.wiring
     :members: Wiring, wire, WithWiringMixin
 
-.. automodule:: antidote.core.utils
+.. autoclass:: antidote.core.utils.Dependency
     :members:
 
 
@@ -123,6 +130,9 @@ Provider
     :members:
 
 .. automodule:: antidote.core.container
+    :members:
+
+.. autoclass::antidote.core.utils.DependencyDebug
     :members:
 
 

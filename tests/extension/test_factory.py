@@ -73,27 +73,25 @@ def test_custom_scope():
     class Scoped:
         pass
 
-    with world.test.clone():
-        class ScopedF(Factory):
-            __antidote__ = Factory.Conf(scope=dummy_scope)
+    class ScopedF(Factory):
+        __antidote__ = Factory.Conf(scope=dummy_scope)
 
-            def __call__(self) -> Scoped:
-                return Scoped()
-
-        x = world.get(Scoped @ ScopedF)
-        assert world.get(Scoped @ ScopedF) is x
-        world.scopes.reset(dummy_scope)
-        assert world.get(Scoped @ ScopedF) is not x
-
-    with world.test.clone():
-        @factory(scope=dummy_scope)
-        def scoped_factory() -> Scoped:
+        def __call__(self) -> Scoped:
             return Scoped()
 
-        x = world.get(Scoped @ scoped_factory)
-        assert world.get(Scoped @ scoped_factory) is x
-        world.scopes.reset(dummy_scope)
-        assert world.get(Scoped @ scoped_factory) is not x
+    x = world.get(Scoped @ ScopedF)
+    assert world.get(Scoped @ ScopedF) is x
+    world.scopes.reset(dummy_scope)
+    assert world.get(Scoped @ ScopedF) is not x
+
+    @factory(scope=dummy_scope)
+    def scoped_factory() -> Scoped:
+        return Scoped()
+
+    x = world.get(Scoped @ scoped_factory)
+    assert world.get(Scoped @ scoped_factory) is x
+    world.scopes.reset(dummy_scope)
+    assert world.get(Scoped @ scoped_factory) is not x
 
 
 def test_with_kwargs(build: Type[Factory]):

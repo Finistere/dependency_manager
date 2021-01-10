@@ -2,7 +2,7 @@ from typing import Hashable
 
 from .._compatibility.typing import final
 from .._internal import API
-from ..core import Container, DependencyDebug, DependencyInstance, StatelessProvider
+from ..core import Container, DependencyDebug, DependencyValue, StatelessProvider
 from ..core.exceptions import DebugNotAvailableError
 
 
@@ -11,7 +11,7 @@ class Lazy:
     def debug_info(self) -> DependencyDebug:
         raise DebugNotAvailableError()
 
-    def lazy_get(self, container: Container) -> DependencyInstance:
+    def lazy_get(self, container: Container) -> DependencyValue:
         raise NotImplementedError()  # pragma: no cover
 
 
@@ -25,5 +25,5 @@ class LazyProvider(StatelessProvider[Lazy]):
         return dependency.debug_info()
 
     def provide(self, dependency: Lazy, container: Container
-                ) -> DependencyInstance:
+                ) -> DependencyValue:
         return dependency.lazy_get(container)

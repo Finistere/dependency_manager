@@ -2,7 +2,7 @@ import pytest
 
 from antidote import Scope, world
 from antidote._providers.lazy import Lazy, LazyProvider
-from antidote.core import Container, DependencyInstance
+from antidote.core import Container, DependencyValue
 
 
 @pytest.fixture()
@@ -17,8 +17,8 @@ class Dummy(Lazy):
         self.value = value
         self.scope = Scope.singleton() if singleton else None
 
-    def lazy_get(self, container: Container) -> DependencyInstance:
-        return DependencyInstance(container.get(self.value), scope=self.scope)
+    def lazy_get(self, container: Container) -> DependencyValue:
+        return DependencyValue(container.get(self.value), scope=self.scope)
 
 
 def test_lazy():
@@ -28,7 +28,7 @@ def test_lazy():
         lazy_provider = LazyProvider()
 
         assert world.test.maybe_provide_from(lazy_provider,
-                                             Dummy(x)).value is world.get(x)
+                                             Dummy(x)).unwrapped is world.get(x)
         for s in [True, False]:
             assert world.test.maybe_provide_from(
                 lazy_provider,

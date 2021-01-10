@@ -16,48 +16,50 @@ class Dependency(Immutable, Generic[T], metaclass=ImmutableGenericMeta):
     """
     Used to clearly state that a value should be treated as a dependency and must
     be retrieved from Antidote. It is recommended to use it through
-    :py:func:`~antidote.world.lazy` as presented:
+    :py:func:`..world.lazy` as presented:
 
     .. doctest:: core_Dependency
 
         >>> from antidote import world
-        >>> world.singletons.add('dependency', 1)
-        >>> world.lazy('dependency')
-        Dependency(value='dependency')
+        >>> world.singletons.add('port', 1)
+        >>> port = world.lazy[int]('port')
+        >>> port.unwrapped
+        'port'
         >>> # to retrieve the dependency later, you may use get()
-        ... world.lazy[int]('dependency').get()
+        ... port.get()
         1
 
     """
-    __slots__ = ('value',)
-    value: Hashable
-    """Dependency to be retrieved"""
+    __slots__ = ('unwrapped',)
+    unwrapped: Hashable
+    """Actual dependency to be retrieved"""
 
-    def __init__(self, value: Hashable) -> None:
+    def __init__(self, dependency: Hashable) -> None:
         """
         Args:
-            value: actual dependency to be retrieved later.
+            dependency: actual dependency to be retrieved.
         """
-        super().__init__(value=value)
+        super().__init__(unwrapped=dependency)
 
     def get(self) -> T:
         """
         Returns:
-            dependency instance retrieved from :py:mod:`~antidote.world`.
+            dependency value retrieved from :py:mod:`~..world`.
         """
         from antidote import world
-        return cast(T, world.get(self.value))
+        return cast(T, world.get(self.unwrapped))
 
     def __hash__(self) -> int:
-        return hash(self.value)
+        return hash(self.unwrapped)
 
     def __eq__(self, other: object) -> bool:
         return (isinstance(other, Dependency)
-                and (self.value is other.value or self.value == other.value))
+                and (self.unwrapped is other.unwrapped
+                     or self.unwrapped == other.unwrapped))
 
     @API.private
     def __antidote_debug_repr__(self) -> str:
-        return f"Dependency(value={debug_repr(self.value)})"
+        return f"Dependency(wrapped={debug_repr(self.unwrapped)})"
 
 
 @API.public
@@ -83,7 +85,7 @@ class DependencyDebug(FinalImmutable):
         Args:
             info: Short and concise information on the dependency, just enough to identify
                 clearly which one it is.
-            singleton: Whether the dependency is a singleton or not.
+            scope: Scope of the dependency.
             wired: Every class or function that may have been wired for this dependency.
             dependencies: Any transient dependency, so dependencies of this dependency.
         """

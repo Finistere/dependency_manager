@@ -2,26 +2,20 @@ from contextlib import contextmanager
 from typing import (Hashable, Iterator, Optional)
 
 from ..._internal import API, state
-from ...core.container import (DependencyInstance, OverridableRawContainer, RawContainer,
-                               RawProvider)
+from ...core.container import (DependencyValue, RawContainer, RawProvider)
 
 
 @API.public
 @contextmanager
 def clone(*,
           keep_singletons: bool = False,
-          keep_scopes: bool = False,
-          overridable: bool = False
+          keep_scopes: bool = False
           ) -> Iterator[None]:
     """
-    Clone current Antidote state (singletons & providers) into a new container. It should
-    be used when you need to rely on existing dependencies defined in your source code.
-    Otherwise consider using :py:func:`.new`.
-
-    You're safe to:
-     - add / delete singletons
-     - override dependencies if :code:`overridable=True`
-     - register new dependencies
+    Clone the current container, namely scopes and providers. Existing singletons and
+    scopes depdency values can also be propagated. Its primary use is to test existing
+    dependencies. Hence the world will already be frozen but overridding dependencies
+    will be possible.
 
     .. doctest:: world_test_clone
 
@@ -43,13 +37,14 @@ def clone(*,
         >>> # You can have the singletons if wish though:
         ... with world.test.clone(keep_singletons=True):
         ...     assert world.get[int]("test") == 1
-        ...     # Overriding is still impossible by default.
+        ...     # A clone is always frozen, its purpose is to test existing dependencies.
         ...     world.singletons.add("test", 10)
         Traceback (most recent call last):
         ...
-        DuplicateDependencyError: 'test'
-        >>> with world.test.clone(overridable=True, keep_singletons=True):
-        ...     # Antidote will support an override once before any usage.
+        FrozenWorldError
+        >>> with world.test.clone(keep_singletons=True):
+        ...     # dependencies can also be overridden as many times as necessary
+        ...     world.test.override.singleton("test", 9)
         ...     world.test.override.singleton("test", 10)
         ...     world.get[int]("test")
         10
@@ -58,12 +53,11 @@ def clone(*,
         1
 
     Args:
-        keep_singletons: Whether current singletons should be kept in the new world. Keep
-            in mind that while you can add and delete singletons without worries, keeping
-            singletins means that you will have the same instances. Defaults to False.
-        overridable: Whether dependencies can be overriden in the new container. Note
-            that you can only override dependencies *once* and only *before any usage*.
-            Defaults to False.
+        keep_singletons: Whether current singletons should be kept in the new world.
+            Beware that the same objects will be propagated. Defaults to :py:obj:`False`.
+        keep_scopes: Whether current dependency values within the existing scopes should
+            be kept in the new world. Like :code:`keep_singletons`, the same objects will
+            be propagated. Defaults to :py:obj:`False`.
 
     Returns:
         context manager within you can make your tests.
@@ -74,28 +68,16 @@ def clone(*,
         return c.clone(keep_singletons=keep_singletons,
                        keep_scopes=keep_scopes)
 
-    if overridable:
-        def overridable_build(c: RawContainer) -> RawContainer:
-            return OverridableRawContainer.from_clone(build(c))
-
-        with state.override(overridable_build):
-            yield
-    else:
-        with state.override(build):
-            yield
+    with state.override(build):
+        yield
 
 
 @API.public
 @contextmanager
-def new(*, raw: bool = False) -> Iterator[None]:
+def new() -> Iterator[None]:
     """
-    Creates a new container void of any dependencies.
-
-    Args:
-        raw: If :py:obj:`True`, you'll get a new world without any  modifications. If
-            :py:obj:`False`, existing scopes and providers will be present in the new
-            container. But they won't have anything in them, as if you just declared
-            them, contrary to :py:func:`.clone`. Defaults to :py:obj:`False`.
+    Creates a new container with the same kind of providers and scopes. So it doesn't
+    have any dependencies defined, but any scope or provider added will be present.
 
     .. doctest:: world_test_new
 
@@ -116,19 +98,8 @@ def new(*, raw: bool = False) -> Iterator[None]:
         DependencyNotFoundError: 'test'
 
     """
-    from ..._internal.utils.world import new_container
-    if raw:
-        with state.override(lambda _: new_container()):
-            yield
-    else:
-        def build(old: RawContainer) -> RawContainer:
-            c = new_container(empty=True)
-            for provider in old.providers:
-                c.add_provider(type(provider))
-            return c
-
-        with state.override(build):
-            yield
+    with state.override(lambda c: RawContainer.with_same_providers_and_scopes(c)):
+        yield
 
 
 ###############################
@@ -141,9 +112,9 @@ def empty() -> Iterator[None]:
     """
     Only used to test providers.
 
-    Creates an empty container. No initial provider are set up. This is useful to test one
-    or several providers in isolation. If you're not testing provider use :py:func:`.new`
-    instead.
+    Creates an empty container. No initial providers are set up. This is useful to test
+    one or several providers in isolation. If you're not testing provider, consider use
+    :py:func:`.new` instead.
     """
     with state.override(lambda _: RawContainer()):
         yield
@@ -151,7 +122,7 @@ def empty() -> Iterator[None]:
 
 @API.public
 def maybe_provide_from(provider: RawProvider,
-                       dependency: Hashable) -> Optional[DependencyInstance]:
+                       dependency: Hashable) -> Optional[DependencyValue]:
     """
     Only used to test providers.
 

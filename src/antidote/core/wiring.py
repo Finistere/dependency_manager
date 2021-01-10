@@ -144,12 +144,8 @@ class Wiring(FinalImmutable):
              wire_super: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL
              ) -> 'Wiring':
         """
-        All arguments are passed to :py:meth:`.__init__` if specified. If not the current
-        ones are used.
-
-        Returns:
-            Wiring: copy of the current object with the specified attributes overriding
-            existing ones.
+        Copies current wiring and overrides only specified arguments.
+        Accepts the same arguments as :py:meth:`.__init__`
         """
         return Copy.immutable(self,
                               methods=methods,
@@ -159,10 +155,8 @@ class Wiring(FinalImmutable):
                               use_names=use_names,
                               use_type_hints=use_type_hints)
 
-    @API.experimental
     def wire(self, klass: C) -> C:
-        """**Experimental**
-
+        """
         Used to wire a class with specified configuration.
 
         Args:

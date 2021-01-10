@@ -52,18 +52,17 @@ class WorldLazy(metaclass=FinalMeta):
 
 
 @API.private
-def new_container(*, empty: bool = False) -> RawContainer:
+def new_container() -> RawContainer:
     """ default new container in Antidote """
 
     from ..._providers import (LazyProvider, ServiceProvider, TagProvider,
                                IndirectProvider, FactoryProvider)
 
     container = RawContainer()
-    if not empty:
-        container.add_provider(FactoryProvider)
-        container.add_provider(LazyProvider)
-        container.add_provider(IndirectProvider)
-        container.add_provider(TagProvider)
-        container.add_provider(ServiceProvider)
+    container.add_provider(FactoryProvider)
+    container.add_provider(LazyProvider)
+    container.add_provider(IndirectProvider)
+    container.add_provider(TagProvider)
+    container.add_provider(ServiceProvider)
 
     return container

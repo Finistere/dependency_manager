@@ -2,7 +2,7 @@ from typing import Dict, Hashable, Optional
 
 import pytest
 
-from antidote.core.container import (Container, DependencyInstance, RawContainer,
+from antidote.core.container import (Container, DependencyValue, RawContainer,
                                      RawProvider, Scope)
 from antidote.core.exceptions import DuplicateDependencyError
 from antidote.core.utils import DependencyDebug
@@ -38,7 +38,7 @@ def container():
 
 def test_dependency_repr():
     o = object()
-    d = DependencyInstance(o, scope=Scope.singleton())
+    d = DependencyValue(o, scope=Scope.singleton())
 
     assert 'singleton' in repr(d)
     assert repr(o) in repr(d)
@@ -55,7 +55,7 @@ def test_add_singletons(container: RawContainer):
     y = object()
     container.add_singletons({'x': x, 'y': y})
 
-    assert container.provide('x').value is x
+    assert container.provide('x').unwrapped is x
     assert container.provide('x').scope is Scope.singleton()
     assert container.get('y') is y
 
@@ -81,9 +81,9 @@ def test_get(container: RawContainer):
     container.get(DummyProvider).data = {'name': 'Antidote'}
 
     assert isinstance(container.get(A), A)
-    assert isinstance(container.provide(A), DependencyInstance)
+    assert isinstance(container.provide(A), DependencyValue)
     assert 'Antidote' == container.get('name')
-    assert 'Antidote' == container.provide('name').value
+    assert 'Antidote' == container.provide('name').unwrapped
 
     with pytest.raises(DependencyNotFoundError):
         container.get(object)
@@ -101,13 +101,13 @@ def test_singleton(container: RawContainer):
 
     service = container.get(A)
     assert container.get(A) is service
-    assert container.provide(A).value is service
+    assert container.provide(A).unwrapped is service
     assert container.provide(A).scope is Scope.singleton()
 
     container.get(DummyFactoryProvider).singleton = False
     another_service = container.get(B)
     assert container.get(B) is not another_service
-    assert container.provide(B).value is not another_service
+    assert container.provide(B).unwrapped is not another_service
     assert container.provide(B).scope is None
 
     assert container.get(A) == service
@@ -218,24 +218,14 @@ def test_clone_keep_singletons(container: RawContainer):
     container.get(DummyProvider).data = {'name': 'Antidote'}
     container.add_singletons({'test': object()})
 
-    cloned = container.clone(keep_singletons=True,
-                             keep_scopes=False)
+    cloned = container.clone(keep_singletons=True)
     assert cloned.get('test') is container.get('test')
     assert cloned.get(DummyProvider) is not container.get(DummyProvider)
 
-    cloned.add_singletons({'test2': 2})
-    with pytest.raises(DependencyNotFoundError):
-        container.get("test2")
-
-    cloned = container.clone(keep_singletons=False,
-                             keep_scopes=False)
+    cloned = container.clone(keep_singletons=False)
     with pytest.raises(DependencyNotFoundError):
         cloned.get("test")
     assert cloned.get(DummyProvider) is not container.get(DummyProvider)
-
-    cloned.add_singletons({'test2': 2})
-    with pytest.raises(DependencyNotFoundError):
-        container.get("test2")
 
 
 def test_providers_must_properly_clone(container: RawContainer):
@@ -290,13 +280,13 @@ def test_raise_if_exists(container: RawContainer):
 
 def test_scope(container: RawContainer):
     class ScopeProvider(RawProvider):
-        dependencies: Dict[object, DependencyInstance] = {}
+        dependencies: Dict[object, DependencyValue] = {}
 
         def exists(self, dependency):
             return dependency in self.dependencies
 
         def maybe_provide(self, dependency: Hashable, container: Container
-                          ) -> Optional[DependencyInstance]:
+                          ) -> Optional[DependencyValue]:
             try:
                 return self.dependencies[dependency]
             except KeyError:
@@ -307,17 +297,17 @@ def test_scope(container: RawContainer):
     scope = container.create_scope('dummy')
     x = object()
     y = object()
-    ScopeProvider.dependencies[1] = DependencyInstance(x, scope=scope)
+    ScopeProvider.dependencies[1] = DependencyValue(x, scope=scope)
     assert container.get(1) is x
 
-    ScopeProvider.dependencies[1] = DependencyInstance(y, scope=scope)
+    ScopeProvider.dependencies[1] = DependencyValue(y, scope=scope)
     # Using cache
     assert container.get(1) is x
-    assert container.provide(1) == DependencyInstance(x, scope=scope)
+    assert container.provide(1) == DependencyValue(x, scope=scope)
 
     container.reset_scope(scope)
     assert container.get(1) is y
-    assert container.provide(1) == DependencyInstance(y, scope=scope)
+    assert container.provide(1) == DependencyValue(y, scope=scope)
 
 
 def test_sanity_checks(container: RawContainer):
@@ -329,3 +319,10 @@ def test_sanity_checks(container: RawContainer):
     container.create_scope('test')
     with pytest.raises(AssertionError):
         container.create_scope('test')
+
+
+def test_already_frozen(container: RawContainer):
+    container.freeze()
+
+    with pytest.raises(FrozenWorldError):
+        container.freeze()
