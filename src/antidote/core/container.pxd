@@ -8,10 +8,7 @@ ctypedef unsigned short Header
 ctypedef unsigned short ScopeId
 
 cdef bint header_is_singleton(Header header)
-cdef bint header_has_scope(Header header)
-cdef bint header_is_cacheable(Header header)
 cdef Header header_scope(ScopeId scope_id)
-cdef Header header_strictest(Header h1, Header h2)
 cdef Header header_flag_singleton()
 cdef Header header_flag_no_scope()
 cdef Header header_flag_cacheable()
@@ -65,17 +62,19 @@ cdef class FastProvider(RawProvider):
 cdef class RawContainer(Container):
     cdef:
         object __weakref__
-        list _providers
+
         DependencyStack _dependency_stack
         object _instantiation_lock
         object _freeze_lock
+
         bint __frozen
-        bint _is_clone
-        dict _singletons
+        dict __singletons
+        list __providers
+        list __scopes
+        list __scope_dependencies
+
         unsigned long __singletons_clock
         object __cache
-        list _scopes
-        list _scope_dependencies
 
     cdef Scope get_scope(self, ScopeId scope_id)
     cdef fast_get(self, PyObject *dependency, DependencyResult *result)

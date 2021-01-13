@@ -7,17 +7,18 @@ from cpython.ref cimport PyObject, Py_XDECREF
 
 from antidote._providers.service cimport Build
 from antidote.core.container cimport (DependencyResult, FastProvider, Header,
-                                      HeaderObject, header_is_singleton,
+                                      HeaderObject, header_is_singleton, Scope,
                                       RawContainer, header_flag_cacheable)
 from .._internal.utils import debug_repr
-from ..core import Dependency, DependencyDebug, Scope
+from ..core import Dependency, DependencyDebug
 from ..core.exceptions import DependencyNotFoundError
 # @formatter:on
 
 cdef extern from "Python.h":
     int PyObject_IsInstance(PyObject *inst, PyObject *cls) except -1
     PyObject*PyDict_GetItem(PyObject *p, PyObject *key)
-    PyObject*PyObject_Call(PyObject *callable, PyObject *args, PyObject *kwargs) except NULL
+    PyObject*PyObject_Call(PyObject *callable, PyObject *args,
+                           PyObject *kwargs) except NULL
     PyObject*PyObject_CallObject(PyObject *callable, PyObject *args) except NULL
 
 
@@ -30,7 +31,7 @@ cdef class FactoryProvider(FastProvider):
 
     def __init__(self):
         super().__init__()
-        self.__factories = dict() # type: Dict[FactoryDependency, Factory]
+        self.__factories = dict()  # type: Dict[FactoryDependency, Factory]
         self.__empty_tuple = tuple()
 
     def __repr__(self):
@@ -106,7 +107,8 @@ cdef class FactoryProvider(FastProvider):
                 result)
             if result.value is NULL:
                 raise DependencyNotFoundError((<Factory> factory).dependency)
-            assert header_is_singleton(result.header), "factory dependency is expected to be a singleton"
+            assert header_is_singleton(
+                result.header), "factory dependency is expected to be a singleton"
             (<Factory> factory).function = <object> result.value
             Py_XDECREF(result.value)
 
@@ -128,10 +130,12 @@ cdef class FactoryProvider(FastProvider):
                  output: type,
                  *,
                  factory: Union[Callable, Dependency],
-                 scope: Optional[Scope]) -> FactoryDependency:
+                 Scope scope) -> FactoryDependency:
         cdef:
             Header header
-        assert inspect.isclass(output)
+        assert inspect.isclass(output) \
+               and (callable(factory) or isinstance(factory, Dependency)) \
+               and (isinstance(scope, Scope) or scope is None)
         with self._bound_container_ensure_not_frozen():
             factory_dependency = FactoryDependency(output, factory)
             self._bound_container_raise_if_exists(factory_dependency)
@@ -143,14 +147,12 @@ cdef class FactoryProvider(FastProvider):
                     header,
                     dependency=factory.unwrapped
                 )
-            elif callable(factory):
+            else:
                 self.__factories[factory_dependency] = Factory.__new__(
                     Factory,
                     header,
                     function=factory
                 )
-            else:
-                raise TypeError(f"factory must be callable, not {type(factory)!r}.")
 
             return factory_dependency
 

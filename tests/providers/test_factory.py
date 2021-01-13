@@ -203,7 +203,7 @@ def test_invalid_lazy_dependency(scope: Scope):
     pytest.param(A, build, object(), id='scope')
 ])
 def test_sanity_checks(provider: FactoryProvider, output, factory, scope):
-    with pytest.raises(AssertionError):
+    with pytest.raises((AssertionError, TypeError)):
         provider.register(output, factory=factory, scope=scope)
 
 

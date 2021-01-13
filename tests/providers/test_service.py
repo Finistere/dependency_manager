@@ -168,5 +168,5 @@ def test_custom_scope(provider: ServiceProvider):
     pytest.param(A, object(), id='scope')
 ])
 def test_sanity_checks(provider: ServiceProvider, klass, scope):
-    with pytest.raises(AssertionError):
+    with pytest.raises((AssertionError, TypeError)):
         provider.register(klass, scope=scope)

@@ -174,10 +174,13 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         # Here host = Conf().get('imdb.host')
         return ImdbAPI(host=host, port=port, api_key=api_key)
 
-    # When requesting MovieDB, a IMDBMovieDB instance will be provided.
-    class IMDBMovieDB(MovieDB, Implementation):
+    @implementation(MovieDB)
+    def current_movie_db():
+        return IMDBMovieDB  # dependency to be provided for MovieDB
+
+    class IMDBMovieDB(MovieDB, Service):
         # New instance each time
-        __antidote__ = Implementation.Conf(singleton=False)
+        __antidote__ = Service.Conf(singleton=False)
 
         @inject(dependencies={'imdb_api': ImdbAPI @ imdb_factory})
         def __init__(self, imdb_api: ImdbAPI):
@@ -186,7 +189,7 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
         def get_best_movies(self):
             pass
 
-    @inject
+    @inject(dependencies=[MovieDB @ current_movie_db])
     def f(movie_db: MovieDB = None):
         assert movie_db is not None  # for Mypy
         pass
@@ -213,9 +216,23 @@ That looks all good, but what about testability ?
         world.test.override.singleton(Conf.IMDB_HOST, 'other host')
         f()
 
+You probably noticed the custom syntax for :code:`MovieDB @ current_movie_db` and
+:code:`ImdbAPI @ imdb_factory`. It ensures that you can always track back where and how
+the dependency is defined. As it can be a bit heavy, Antidote allows to define some
+implicit dependencies, but only once:
+
+.. code-block:: python
+
+    # Can only be defined once.
+    world.implicits.set({
+        ImdbAPI: ImdbAPI @ imdb_factory,
+        MovieDB: MovieDB @ current_movie_db
+    })
+    # Now works without specifying anything
+    world.get[MovieDB]()
+
 If you ever need to debug your dependency injections, Antidote also provides a tool to
-have a quick summary of what is actually going on. This would be especially helpful if
-you encounter cyclic dependencies for example.
+have a quick summary of what is actually going on:
 
 .. code-block:: python
 
@@ -223,7 +240,7 @@ you encounter cyclic dependencies for example.
     # will output:
     """
     f
-    └── Static link: MovieDB -> IMDBMovieDB
+    └── Permanent implementation: MovieDB @ current_movie_db
         └──<∅> IMDBMovieDB
             └── ImdbAPI @ imdb_factory
                 └── imdb_factory

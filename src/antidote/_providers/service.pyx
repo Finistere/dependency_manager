@@ -117,7 +117,8 @@ cdef class ServiceProvider(FastProvider):
     def register(self, klass: type, *, Scope scope):
         cdef:
             Header header
-        assert inspect.isclass(klass)
+        assert inspect.isclass(klass) \
+               and (isinstance(scope, Scope) or scope is None)
         with self._bound_container_ensure_not_frozen():
             self._bound_container_raise_if_exists(klass)
             self.__services[klass] = HeaderObject.from_scope(scope)

@@ -11,26 +11,28 @@ class IndirectProvider(Provider[Hashable]):
     def __init__(self) -> None:
         super().__init__()
         self.__implementations: Set[ImplementationDependency] = set()
-        self.__implicits: Dict[Hashable, Hashable] = dict()
+        self.__implicits_registered: bool = False
+        self.__indirect: Dict[Hashable, Hashable] = dict()
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(links={self.__implementations}, " \
-               f"static_links={self.__implicits})"
+        return f"{type(self).__name__}(implementations={self.__implementations}, " \
+               f"indirect={self.__indirect}, implicits={self.__implicits_registered})"
 
     def clone(self, keep_singletons_cache: bool) -> 'IndirectProvider':
         p = IndirectProvider()
+        p.__implicits_registered = self.__implicits_registered
         p.__implementations = self.__implementations.copy()
-        p.__implicits = self.__implicits.copy()
+        p.__indirect = self.__indirect.copy()
         return p
 
     def exists(self, dependency: Hashable) -> bool:
-        return dependency in self.__implicits or dependency in self.__implementations
+        return dependency in self.__indirect or dependency in self.__implementations
 
     def maybe_debug(self, dependency: Hashable) -> Optional[DependencyDebug]:
         if dependency in self.__implementations:
             impl = cast(ImplementationDependency, dependency)
-            if dependency in self.__implicits:
-                target = self.__implicits[dependency]
+            if dependency in self.__indirect:
+                target = self.__indirect[dependency]
             else:
                 target = impl.implementation()  # type: ignore
 
@@ -40,7 +42,7 @@ class IndirectProvider(Provider[Hashable]):
                                    dependencies=[target])
 
         try:
-            target = self.__implicits[dependency]
+            target = self.__indirect[dependency]
         except KeyError:
             pass
         else:
@@ -53,7 +55,7 @@ class IndirectProvider(Provider[Hashable]):
     def maybe_provide(self, dependency: Hashable, container: Container
                       ) -> Optional[DependencyValue]:
         try:
-            target = self.__implicits[dependency]
+            target = self.__indirect[dependency]
         except KeyError:
             pass
         else:
@@ -64,7 +66,7 @@ class IndirectProvider(Provider[Hashable]):
             # Mypy treats linker as a method
             target = impl.implementation()  # type: ignore
             if impl.permanent:
-                self.__implicits[dependency] = target
+                self.__indirect[dependency] = target
             value = container.provide(target)
             return DependencyValue(
                 value.unwrapped,
@@ -75,11 +77,12 @@ class IndirectProvider(Provider[Hashable]):
 
     def register_implicits(self, dependency_to_target: Dict[Hashable, Hashable]) -> None:
         assert isinstance(dependency_to_target, dict)
-        if self.__implicits:
+        if self.__implicits_registered:
             raise RuntimeError("Implicits have already been defined once.")
         for dependency in dependency_to_target.keys():
             self._assert_not_duplicate(dependency)
-        self.__implicits = dependency_to_target.copy()
+        self.__implicits_registered = True
+        self.__indirect.update(dependency_to_target)
 
     def register_implementation(self,
                                 interface: type,

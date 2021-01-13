@@ -39,21 +39,14 @@ cdef inline ScopeId header_get_scope_id(Header header):
 cdef inline Header header_scope(ScopeId scope_id):
     return HEADER_FLAG_HAS_SCOPE | ((scope_id & 0xFF) << 8)
 
-# Utilities outside of container.pyx
-
 cdef bint header_is_singleton(Header header):
-    return (header & HEADER_FLAG_SINGLETON) == HEADER_FLAG_SINGLETON
+    return header & HEADER_FLAG_SINGLETON
 
 cdef bint header_has_scope(Header header):
-    return (header & HEADER_FLAG_HAS_SCOPE) == HEADER_FLAG_HAS_SCOPE
+    return header & HEADER_FLAG_HAS_SCOPE
 
 cdef bint header_is_cacheable(Header header):
-    return (header & HEADER_FLAG_CACHEABLE) == HEADER_FLAG_CACHEABLE
-
-cdef Header header_strictest(Header h1, Header h2):
-    if (h1 >> 8) == (h2 >> 8):
-        return h1 & h2
-    return HEADER_FLAG_NO_SCOPE
+    return header & HEADER_FLAG_CACHEABLE
 
 cdef Header header_flag_singleton():
     return HEADER_FLAG_SINGLETON
@@ -122,7 +115,7 @@ cdef class HeaderObject:
 @cython.freelist(64)
 @cython.final
 cdef class DependencyValue:
-    def __init__(self, value, *, Scope scope = None):
+    def __cinit__(self, value, *, Scope scope = None):
         assert scope is not _SCOPE_SENTINEL
         self.unwrapped = value
         self.scope = scope
@@ -147,6 +140,7 @@ cdef class DependencyValue:
     cdef DependencyValue from_result(RawContainer container, DependencyResult *result):
         scope = HeaderObject(result.header).to_scope(container)
         value = <object> result.value
+        print(scope, value)
         Py_XDECREF(result.value)
         return DependencyValue.__new__(DependencyValue,
                                        value,
@@ -269,52 +263,38 @@ cdef class RawContainer(Container):
     """
 
     def __init__(self):
-        self._providers = list()  # type: List[RawProvider]
-        self._singletons = dict()  # type: dict
         self._dependency_stack = DependencyStack()
         self._instantiation_lock = create_fastrlock()
         self._freeze_lock = threading.RLock()
-        self._is_clone = False
         self.__frozen = False
-        self._scopes = []
-        self._scope_dependencies = []  # type: List[dict]
+        self.__providers = list()  # type: List[RawProvider]
+        self.__singletons = dict()  # type: dict
+        self.__scopes = []
+        self.__scope_dependencies = []  # type: List[dict]
 
         # Cython optimizations
         self.__singletons_clock = 0
         self.__cache = DependencyCache()
 
     def __repr__(self):
-        return f"{type(self).__name__}(_providers={', '.join(map(str, self._providers))})"
+        return f"{type(self).__name__}(__providers={', '.join(map(str, self.__providers))})"
 
-    @property
-    def is_clone(self):
-        return self._is_clone
-
-    def create_scope(self, str name):
-        cdef:
-            Scope s = Scope(name)
-        with self.locked():
-            s.id = <ScopeId> (1 + len(self._scopes))
-            assert s.id <= 0xFF
-            assert all(s.name != name for s in self._scopes)
-            self._scopes.append(s)
-            self._scope_dependencies.append(dict())
-        return s
-
-    def reset_scope(self, Scope scope):
-        with self._instantiation_lock:
-            self._scope_dependencies[scope.id - 1] = dict()
-
-    cdef Scope get_scope(self, ScopeId scope_id):
-        return <Scope> self._scopes[scope_id - 1]
+    @staticmethod
+    def with_same_providers_and_scopes(RawContainer original):
+        container = RawContainer()
+        for provider in original.providers:
+            container.add_provider(type(provider))
+        container.__scopes = original.__scopes.copy()
+        container.__scope_dependencies = [dict() for _ in range(len(original.__scopes))]
+        return container
 
     @property
     def scopes(self):
-        return self._scopes.copy()
+        return self.__scopes.copy()
 
     @property
     def providers(self):
-        return self._providers.copy()
+        return self.__providers.copy()
 
     @contextmanager
     def locked(self):
@@ -330,16 +310,18 @@ cdef class RawContainer(Container):
 
     def freeze(self):
         with self._freeze_lock:
+            if self.__frozen:
+                raise FrozenWorldError("Container is already frozen !")
             self.__frozen = True
 
     def add_provider(self, provider_cls: Type[RawProvider]):
         cdef:
             RawProvider provider
         with self.ensure_not_frozen(), self._instantiation_lock:
-            assert all(provider_cls != type(p) for p in self._providers)
+            assert all(provider_cls != type(p) for p in self.__providers)
             provider = provider_cls()
             provider._container_ref = ref(self)
-            self._providers.append(provider)
+            self.__providers.append(provider)
             (<DependencyCache> self.__cache).set(<PyObject*> provider_cls,
                                                  HEADER_FLAG_SINGLETON,
                                                  <PyObject*> provider)
@@ -353,17 +335,35 @@ cdef class RawContainer(Container):
                 (<DependencyCache> self.__cache).set(<PyObject*> k,
                                                      HEADER_FLAG_SINGLETON,
                                                      <PyObject*> v)
-            self._singletons.update(dependencies)
+            self.__singletons.update(dependencies)
             self.__singletons_clock += 1
+
+    def create_scope(self, str name):
+        cdef:
+            Scope s = Scope(name)
+        with self.ensure_not_frozen(), self._instantiation_lock:
+            s.id = <ScopeId> (1 + len(self.__scopes))
+            assert s.id <= 0xFF
+            assert all(s.name != name for s in self.__scopes)
+            self.__scopes.append(s)
+            self.__scope_dependencies.append(dict())
+        return s
+
+    def reset_scope(self, Scope scope):
+        with self._instantiation_lock:
+            self.__scope_dependencies[scope.id - 1] = dict()
+
+    cdef Scope get_scope(self, ScopeId scope_id):
+        return <Scope> self.__scopes[scope_id - 1]
 
     def raise_if_exists(self, dependency: Hashable):
         with self._freeze_lock:
-            if dependency in self._singletons:
+            if dependency in self.__singletons:
                 raise DuplicateDependencyError(
                     f"{dependency!r} has already been defined as a singleton pointing "
-                    f"to {self._singletons[dependency]}")
+                    f"to {self.__singletons[dependency]}")
 
-            for provider in self._providers:
+            for provider in self.__providers:
                 if provider.exists(dependency):
                     debug = provider.maybe_debug(dependency)
                     message = f"{dependency!r} has already been declared " \
@@ -375,47 +375,47 @@ cdef class RawContainer(Container):
 
     def clone(self,
               *,
-              keep_singletons: bool,
-              keep_scopes: bool) -> 'RawContainer':
+              keep_singletons: bool = False,
+              keep_scopes: bool = False) -> 'RawContainer':
         cdef:
-            RawProvider clone
-            RawProvider p
-            RawContainer c = type(self)()
+            RawContainer clone
+            RawProvider p_clone
 
-        c._is_clone = True
         with self.locked():
-            # clone is only used for tests, so don't really care about the cache.
+            clone = OverridableRawContainer()
+            clone.__frozen = True
             if keep_singletons:
-                c._singletons = self._singletons.copy()
+                clone.__singletons = self.__singletons.copy()
 
-            c._scopes = self._scopes
-            c._scope_dependencies = [
+
+            clone.__scopes = self.__scopes
+            clone.__scope_dependencies = [
                 d.copy() if keep_scopes else dict()
-                for d in self._scope_dependencies
+                for d in self.__scope_dependencies
             ]
 
-            for p in self._providers:
-                clone = p.clone(keep_singletons)
-                if clone is p or clone._container_ref is not None:
+            for p in self.__providers:
+                p_clone = p.clone(keep_singletons)
+                if p_clone is p or p_clone._container_ref is not None:
                     raise RuntimeError("A Provider should always return a fresh "
                                        "instance when copy() is called.")
-                clone._container_ref = ref(c)
-                c._providers.append(clone)
-                c._singletons[type(p)] = clone
+                p_clone._container_ref = ref(clone)
+                clone.__providers.append(p_clone)
+                clone.__singletons[type(p)] = p_clone
 
-        return c
+            return clone
 
     def debug(self, dependency: Hashable):
         from .._internal.utils.debug import debug_repr
         from .utils import DependencyDebug
 
         with self._freeze_lock:
-            for p in self._providers:
+            for p in self.__providers:
                 debug = p.maybe_debug(dependency)
                 if debug is not None:
                     return debug
             try:
-                value = self._singletons[dependency]
+                value = self.__singletons[dependency]
                 return DependencyDebug(f"Singleton: {debug_repr(dependency)} "
                                        f"-> {value!r}",
                                        scope=Scope.singleton())
@@ -463,7 +463,7 @@ cdef class RawContainer(Container):
                 self.__safe_cache_provide(dependency, result, value)
         else:
             clock = self.__singletons_clock
-            ptr = PyDict_GetItem(<PyObject*> self._singletons, dependency)
+            ptr = PyDict_GetItem(<PyObject*> self.__singletons, dependency)
             if ptr:
                 result.header = HEADER_FLAG_SINGLETON
                 result.value = ptr
@@ -480,7 +480,7 @@ cdef class RawContainer(Container):
             PyObject *value
             object lock = self._instantiation_lock
             PyObject *stack = <PyObject*> self._dependency_stack
-            PyObject *scope_dependencies = <PyObject*> self._scope_dependencies
+            PyObject *scope_dependencies = <PyObject*> self.__scope_dependencies
 
         lock_fastrlock(lock, -1, True)
 
@@ -507,7 +507,7 @@ cdef class RawContainer(Container):
             assert result.value, "Once cached, a dependency must always be providable"
             cached.header = result.header
             if result.header & HEADER_FLAG_SINGLETON:
-                PyDict_SetItem(<PyObject*> self._singletons, dependency, result.value)
+                PyDict_SetItem(<PyObject*> self.__singletons, dependency, result.value)
                 self.__singletons_clock += 1
                 Py_XDECREF(cached.ptr)
                 cached.ptr = result.value
@@ -539,7 +539,7 @@ cdef class RawContainer(Container):
             ScopeId scope_id
             Exception error
             object lock = self._instantiation_lock
-            PyObject *singletons = <PyObject*> self._singletons
+            PyObject *singletons = <PyObject*> self.__singletons
             PyObject *stack = <PyObject*> self._dependency_stack
             PyObject *providers
             PyObject *scope_dependencies
@@ -558,7 +558,7 @@ cdef class RawContainer(Container):
                 Py_XINCREF(result.value)
                 return
 
-        scope_dependencies = <PyObject*> self._scope_dependencies
+        scope_dependencies = <PyObject*> self.__scope_dependencies
         for i in range(<size_t> PyList_Size(scope_dependencies)):
             value = PyDict_GetItem(PyList_GET_ITEM(scope_dependencies, i), dependency)
             if value:
@@ -574,7 +574,7 @@ cdef class RawContainer(Container):
             raise error
 
         try:
-            providers = <PyObject*> self._providers
+            providers = <PyObject*> self.__providers
             for i in range(<size_t> PyList_Size(providers)):
                 provider = PyList_GET_ITEM(providers, i)
                 (<RawProvider> provider).fast_provide(
@@ -777,7 +777,6 @@ cdef class OverridableRawContainer(RawContainer):
 
     def __init__(self):
         super().__init__()
-        self._is_clone = True
         self.__override_lock = threading.RLock()
         # Used to differentiate singletons from the overrides and the "normal" ones.
         self.__singletons_override = dict()
@@ -785,26 +784,27 @@ cdef class OverridableRawContainer(RawContainer):
         self.__factory_overrides = dict()  # type: Dict[Any, Tuple[Callable[[], Any], Optional[Scope]]]
         self.__provider_overrides = deque()  # type: Deque[Callable[[Any], Optional[DependencyValue]]]
 
-    @classmethod
-    def from_clone(cls, RawContainer cloned) -> 'OverridableRawContainer':
+
+    def clone(self,
+              *,
+              keep_singletons: bool = False,
+              keep_scopes: bool = False) -> 'OverridableRawContainer':
         cdef:
-            OverridableRawContainer container = OverridableRawContainer()
+            OverridableRawContainer clone
 
-        container._singletons = cloned._singletons
-        container._scopes = cloned._scopes
-        container._scope_dependencies = cloned._scope_dependencies
-        for scope in container._scopes:
-            container.__scopes_override[scope] = dict()
-        container._providers = cloned._providers
+        with self.locked():
+            clone = super().clone(keep_singletons=keep_singletons,
+                                  keep_scopes=keep_scopes)
+            if keep_singletons:
+                clone.__singletons_override = self.__singletons_override
+            clone.__scopes_override = {
+                scope: dependencies.copy() if keep_scopes else dict()
+                for scope, dependencies in self.__scopes_override.items()
+            }
+            clone.__factory_overrides = self.__factory_overrides
+            clone.__provider_overrides = self.__provider_overrides
 
-        if isinstance(cloned, OverridableRawContainer):
-            container.__singletons_override = (
-                <OverridableRawContainer> cloned).__singletons_override
-            container.__factory_overrides = (
-                <OverridableRawContainer> cloned).__factory_overrides
-            container.__provider_overrides = (
-                <OverridableRawContainer> cloned).__provider_overrides
-        return container
+            return clone
 
     def override_singletons(self, singletons: dict):
         with self.__override_lock:
@@ -900,13 +900,13 @@ cdef class OverridableRawContainer(RawContainer):
 
                 try:
                     for provider in self.__provider_overrides:
-                        di = provider(dep)
-                        if di is not None:
-                            if di.scope is Scope.singleton():
-                                self.__singletons_override[dep] = di.value
-                            elif di.scope is not None:
-                                self.__scopes_override[di.scope][dep] = di.value
-                            (<DependencyValue?> di).to_result(result)
+                        value = provider(dep)
+                        if value is not None:
+                            if value.scope is Scope.singleton():
+                                self.__singletons_override[dep] = value.unwrapped
+                            elif value.scope is not None:
+                                self.__scopes_override[value.scope][dep] = value.unwrapped
+                            (<DependencyValue?> value).to_result(result)
                             return
 
                     try:
