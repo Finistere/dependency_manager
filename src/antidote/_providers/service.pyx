@@ -6,7 +6,7 @@ cimport cython
 from cpython.ref cimport PyObject
 
 from antidote.core.container cimport (DependencyResult, FastProvider, Header, HeaderObject,
-                                      header_flag_no_scope, header_scope, Scope, header_flag_cacheable)
+                                      Scope, header_flag_cacheable)
 from .._internal.utils import debug_repr
 # @formatter:on
 from ..core import DependencyDebug

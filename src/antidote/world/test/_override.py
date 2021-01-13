@@ -178,6 +178,7 @@ def provider() -> Callable[[P], P]:
     Returns:
         Function decorator.
     """
+
     def decorate(p: P) -> P:
         if not callable(p):
             raise TypeError(f"provider must be a callable, not {type(p)}")

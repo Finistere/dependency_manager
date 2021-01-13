@@ -1,5 +1,4 @@
 import collections.abc as c_abc
-import enum
 import inspect
 from typing import Callable, cast, FrozenSet, Iterable, Optional, overload, TypeVar, Union
 

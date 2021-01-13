@@ -1,6 +1,7 @@
 import collections.abc as c_abc
-from typing import (Any, Callable, cast, Generic, Hashable, Iterable, Mapping,
-                    Optional, overload, Sequence, Type, TypeVar, Union)
+from typing import (Any, Callable, Hashable, Iterable, Mapping,
+                    Optional, overload, Sequence, TypeVar, Union)
+
 from ._injection import raw_inject
 from .._compatibility.typing import final
 from .._internal import API

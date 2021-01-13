@@ -1,5 +1,5 @@
 import inspect
-from typing import (Any, Callable, cast, get_type_hints, Hashable, Iterable, Optional,
+from typing import (Callable, cast, get_type_hints, Iterable, Optional,
                     overload, Tuple, TypeVar, Union)
 
 from ._compatibility.typing import final, Protocol

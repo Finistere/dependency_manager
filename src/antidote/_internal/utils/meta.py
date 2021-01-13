@@ -1,4 +1,4 @@
-from typing import cast, Dict, Iterable, Tuple, Type
+from typing import cast, Dict, Tuple, Type
 
 from .. import API
 

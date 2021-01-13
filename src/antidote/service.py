@@ -5,8 +5,8 @@ from ._internal import API
 from ._internal.utils import Copy, FinalImmutable
 from ._providers import Tag
 from ._service import ServiceMeta
-from .core.exceptions import DuplicateDependencyError
 from .core import Wiring, WithWiringMixin, Scope
+from .core.exceptions import DuplicateDependencyError
 from .utils import validated_scope, validated_tags
 
 C = TypeVar('C', bound=type)

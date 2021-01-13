@@ -1,5 +1,5 @@
 import enum
-from typing import overload, TypeVar, Union
+from typing import TypeVar
 
 from .debug import debug_repr, short_id
 from .immutable import FinalImmutable, Immutable

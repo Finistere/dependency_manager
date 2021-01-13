@@ -1,5 +1,5 @@
 import inspect
-from typing import Callable, Dict, Hashable, Optional, Set, cast
+from typing import Callable, Dict, Hashable, Optional
 
 from .._internal import API
 from .._internal.utils import debug_repr, FinalImmutable

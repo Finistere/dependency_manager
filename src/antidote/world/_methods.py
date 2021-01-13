@@ -4,9 +4,7 @@ from typing import Dict, Hashable, overload, Type, TypeVar, Union
 from .._internal import API
 from .._internal.state import init, current_container
 from .._internal.utils.world import WorldGet, WorldLazy
-from .._providers import IndirectProvider
 from ..core.container import RawProvider, Scope
-from ..utils import validate_provided_class
 
 # Create the global container
 init()
