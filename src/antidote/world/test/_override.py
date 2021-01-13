@@ -96,12 +96,17 @@ def factory(dependency: Hashable = None,
         ...     def test() -> Dummy:
         ...         return Dummy()
         ...     world.get[Dummy]()
-        Dummy
+        <Dummy ...>
 
     Args:
         dependency: Dependency to override.
-        singleton: Whether the output returned by the factory should be treated as a
-            singleton or not. If so, the factory will only be called once.
+        singleton: Whether the returned dependency  is a singleton or not. If yes,
+            the factory will be called at most once and the result re-used. Mutually
+            exclusive with :code:`scope`. Defaults to :py:obj:`True`.
+        scope: Scope of the returned dependency. Mutually exclusive with
+            :code:`singleton`. The scope defines if and how long the returned dependency
+            will be cached. See :py:class:`~.core.container.Scope`. Defaults to
+            :py:meth:`~.core.container.Scope.singleton`.
 
     .. note::
 

@@ -12,32 +12,10 @@ Use interfaces
 ==============
 
 
-Antidote supports the distinction interface/implementation out of the box.
-When the choice of the implementation is straightforward you can simply use
-:py:func:`~.Implementation`:
-
-.. testcode:: recipes_interface_implements
-
-    from antidote import Implementation
-
-    class Interface:
-        pass
-
-    # Interface MUST always be inherited first and Implementation second
-    # Any other super class must be inherited afterwards.
-    class MyService(Interface, Implementation):
-        pass
-
-.. doctest:: recipes_interface_implements
-
-    >>> from antidote import world
-    >>> world.get[Interface]()
-    <MyService ...>
-
-If you have multiple possible implementation you'll need to rely on the function decorator
-:py:func:`~.implementation`. The result of the function will be the retrieved dependency
-for the specified interface. Typically this means a class registered as a service or one
-that can be provided by a factory.
+Antidote supports the distinction interface/implementation out of the box with the
+function decorator :py:func:`~.implementation`. The result of the function will be the
+retrieved dependency for the specified interface. Typically this means a class registered
+as a service or one that can be provided by a factory.
 
 .. testcode:: recipes_interface_implementation
 
@@ -57,7 +35,7 @@ that can be provided by a factory.
     # permanent is True by default. If you want to choose each time which implementation
     # should be used, set it to False.
     @implementation(Database, permanent=True, dependencies=['db_conn_str'])
-    def choose_db(conn_str):
+    def local_db(conn_str):
         db, host, name = conn_str.split(':')
         if db == 'postgres':
             # Complex dependencies are supported
@@ -73,24 +51,13 @@ that can be provided by a factory.
 
     >>> from antidote import world
     >>> world.singletons.add('db_conn_str', 'postgres:localhost:my_project')
-    >>> db = world.get[Database]()
+    >>> db = world.get[Database](Database @ local_db)
     >>> db
     <PostgresDB ...>
     >>> db.host
     'localhost'
     >>> db.name
     'my_project'
-
-
-.. note::
-
-    You may wonder why one needs to specify the interface in :py:func:`~.implements`,
-    as here the interface is obvious. There are two reasons for this:
-
-    - Multiple and/or deep inheritance chain would otherwise make it ambiguous
-      to know which interface is used by Antidote.
-    - While it isn't perfect, you can easily find which services are used by
-      Antidote by searching :code:`@implements(Interface` through your code.
 
 
 
@@ -184,32 +151,9 @@ instance of :py:class:`.Tag`.
 .. doctest:: recipes_tags
 
     >>> from antidote import world, Tagged
-    >>> tagged = world.get[Tagged](tag)
+    >>> tagged = world.get[Tagged](Tagged.with_(tag))
     >>> list(sorted(tagged.values(), key=lambda plugin: type(plugin).__name__))
     [<PluginA ...>, <PluginB ...>]
-
-You can do more than that with tags though, you can
-
-- store information in them.
-- change how dependencies are grouped.
-
-To do so, just create your own subclass:
-
-.. testcode:: recipes_tags
-
-    class CustomTag(Tag):
-        __slots__ = ('name',)  # __slots__ isn't required
-        name: str  # For Mypy
-
-        def __init__(self, name: str):
-            # Tag defining all its instances as immutable you can't do a
-            # self.name = name
-            # so you have to through the parent constructor.
-            super().__init__(name=name)
-
-        def group(self):
-            # All tags having the same group will be retrieved together by Antidote
-            return self.name.split("_")[0]
 
 Antidote will always return a :py:class:`.Tagged`, whether there are tagged instances or
 not.
@@ -344,7 +288,6 @@ to a dictionary and use the following:
     'my key'
 
 
-
 Specifying a type / Using Enums
 -------------------------------
 
@@ -406,6 +349,42 @@ and use it as a one.
     floats typically as configuration may be stored as a string.
 
 
+Default values
+--------------
+
+Default values can be specified in :py:func:`.const`:
+
+.. testcode:: recipes_configuration_default
+
+    import os
+    from antidote import Constants, const
+
+    class Env(Constants):
+        HOST = const[str]('HOST', default='localhost')
+
+        def get(self, value):
+            return os.environ[value]
+
+It will be use if :code:`get` raises a py:exec:`KeyError`. For more complex behavior,
+using a :py:class:`collections.ChainMap` which loads your defaults and the user is a good
+alternative:
+
+.. testcode:: recipes_configuration_default
+
+    from collections import ChainMap
+    from antidote import Constants, const
+
+    class Configuration(Constants):
+        def __init__(self):
+            user_conf = dict()  # load conf from a file, etc..
+            default_conf = dict()
+            # User conf will override default_conf
+            self._raw_conf = ChainMap(user_conf, default_conf)
+
+An alternative to this would be using a configuration format that supports overrides, such
+as HOCON.
+
+
 
 Scopes
 ======
@@ -455,3 +434,36 @@ In a Flask app for example you would then just reset the scope after each reques
     @app.after_request
     def reset_request_scope():
         world.scopes.reset(REQUEST_SCOPE)
+
+
+
+Implicits
+=========
+
+Implicits can be defined through :py:func:`.world.implicits.set`:
+
+.. doctest:: recipes_implicits
+
+    >>> from antidote import world, factory
+    >>> class Dummy:
+    ...     pass
+    >>> @factory
+    ... def build_dummy() -> Dummy:
+    ...     return Dummy()
+    >>> world.implicits.set({Dummy: Dummy @ build_dummy})
+    >>> world.get(Dummy) is world.get(Dummy @ build_dummy)
+    True
+    >>> world.implicits.set({Dummy: Dummy @ build_dummy})
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in ?
+    RuntimeError: Implicits have already been defined once.
+
+This can improve the readability of your code with :py:func:`.factory` or
+:py:func:`.implementation`. However as we lose the information of where the dependency is
+coming from, the implicits can only be defined once. Typically you would put it in the
+start-up code of your application.
+
+.. note::
+
+    It is *not* recommended to use implicits *initially* in your application. Only use it
+    once you really feel the need for it.

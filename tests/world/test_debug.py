@@ -1,7 +1,7 @@
 import textwrap
 
 from antidote import (const, Constants, factory, implementation, inject,
-                      LazyCall, LazyMethodCall, Service, Tag, world)
+                      LazyCall, LazyMethodCall, Service, Tag, world, Tagged)
 from antidote._internal.utils import raw_getattr, short_id
 
 
@@ -254,25 +254,14 @@ def test_tag():
     with world.test.new():
         tag = Tag()
 
-        class CustomTag(Tag):
-            def group(self):
-                return 'dummy'
-
         class S1(Service):
-            __antidote__ = Service.Conf(tags=[tag, CustomTag()])
+            __antidote__ = Service.Conf(tags=[tag])
 
         assert_valid(
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 expected=f"""
-                <∅> Tag: Tag#{short_id(tag)}
-                └── {prefix}.S1
-                """
-            ),
-            DebugTestCase(
-                value=CustomTag(),
-                expected=f"""
-                <∅> Tag: 'dummy'
+                <∅> Tagged with Tag#{short_id(tag)}
                 └── {prefix}.S1
                 """
             )
@@ -474,26 +463,26 @@ def test_complex_debug():
         prefix = "tests.world.test_debug.test_complex_debug.<locals>"
         assert_valid(
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 depth=0,
                 expected=f"""
-                    <∅> Tag: Tag#{short_id(tag)}
+                    <∅> Tagged with Tag#{short_id(tag)}
                         """
             ),
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 depth=1,
                 expected=f"""
-                    <∅> Tag: Tag#{short_id(tag)}
+                    <∅> Tagged with Tag#{short_id(tag)}
                     ├── {prefix}.Service4
                     └──<∅> {prefix}.Service3
                         """
             ),
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 depth=2,
                 expected=f"""
-                    <∅> Tag: Tag#{short_id(tag)}
+                    <∅> Tagged with Tag#{short_id(tag)}
                     ├── {prefix}.Service4
                     │   ├──<∅> {prefix}.Service3
                     │   ├── {prefix}.Service2 @ {prefix}.build_s2
@@ -505,10 +494,10 @@ def test_complex_debug():
                         """
             ),
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 depth=3,
                 expected=f"""
-                <∅> Tag: Tag#{short_id(tag)}
+                <∅> Tagged with Tag#{short_id(tag)}
                 ├── {prefix}.Service4
                 │   ├──<∅> {prefix}.Service3
                 │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
@@ -528,9 +517,9 @@ def test_complex_debug():
                         """
             ),
             DebugTestCase(
-                value=tag,
+                value=Tagged.with_(tag),
                 expected=f"""
-                <∅> Tag: Tag#{short_id(tag)}
+                <∅> Tagged with Tag#{short_id(tag)}
                 ├── {prefix}.Service4
                 │   ├──<∅> {prefix}.Service3
                 │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl

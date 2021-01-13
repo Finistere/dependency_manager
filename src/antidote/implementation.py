@@ -45,29 +45,29 @@ def implementation(interface: type,
     .. doctest:: helpers_implementation
 
         >>> from antidote import implementation, Service, factory, world
-        >>> class Interface:
+        >>> class Database:
         ...     pass
-        >>> class A(Interface, Service):
+        >>> class PostgreSQL(Database, Service):
         ...     pass
-        >>> class B(Interface):
+        >>> class MySQL(Database):
         ...     pass
         >>> @factory
-        ... def build_b() -> B:
-        ...     return B()
-        >>> @implementation(Interface, dependencies=['choice'])
-        ... def choose_interface(choice: str):
+        ... def build_mysql() -> MySQL:
+        ...     return MySQL()
+        >>> @implementation(Database, dependencies=['choice'])
+        ... def local_db(choice: str):
         ...     if choice == 'a':
-        ...         return A  # One could also use A.with_kwargs(...)
+        ...         return PostgreSQL  # One could also use PostgreSQL.with_kwargs(...)
         ...     else:
-        ...         return B @ build_b  # or B @ build_b.with_kwargs(...)
-        >>> world.singletons.add('choice', 'b')
-        >>> world.get(Interface)
-        <B ...>
+        ...         return MySQL @ build_mysql  # or MySQL @ build_mysql.with_kwargs(...)
+        >>> world.singletons.add('choice', 'a')
+        >>> world.get(Database @ local_db)
+        <PostgreSQL ...>
         >>> # Changing choice doesn't matter anymore as the implementation is permanent.
         ... with world.test.clone():
-        ...     world.test.override.singleton('choice', 'a')
-        ...     world.get(Interface)
-        <B ...>
+        ...     world.test.override.singleton('choice', 'b')
+        ...     world.get(Database @ local_db)
+        <PostgreSQL ...>
 
     Args:
         interface: Interface for which an implementation will be provided

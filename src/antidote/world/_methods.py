@@ -193,9 +193,8 @@ def debug(dependency: Hashable, *, depth: int = -1) -> str:
 
     .. note::
 
-        It will NOT instantiate any dependencies, hence with :py:func:`.implementation`
-        for example it won't run the function to determine which implementation must be
-        used.
+        With :py:func:`.implementation`, it'll execute the function to know which
+        dependency to follow.
 
     Args:
         dependency: Root of the dependency tree.

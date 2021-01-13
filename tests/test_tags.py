@@ -66,10 +66,10 @@ def test_tags(builder: Builder):
     tag = Tag()
     dep = builder([tag])
 
-    tagged = cast(Tagged, world.get(tag))
+    tagged = cast(Tagged, world.get(Tagged.with_(tag)))
 
     assert len(tagged) == 1
-    assert list(tagged.tags()) == [tag]
+    assert tagged.tag is tag
     assert set(tagged.values()) == {world.get(dep)}
 
 
@@ -91,31 +91,10 @@ def test_multiple_tags(builder: Builder):
     dep = builder(tags)
 
     for t in tags:
-        tagged = cast(Tagged, world.get(t))
+        tagged = cast(Tagged, world.get(Tagged.with_(t)))
         assert len(tagged) == 1
-        assert list(tagged.tags()) == [t]
+        assert tagged.tag is t
         assert set(tagged.values()) == {world.get(dep)}
-
-
-def test_custom_tags(builder: Builder):
-    class CustomTag(Tag):
-        __slots__ = ('name', 'attr')
-        name: str
-        attr: int
-
-        def __init__(self, name: str, attr: int = 0):
-            super().__init__(name=name, attr=attr)
-
-        def group(self):
-            return self.name
-
-    tag = CustomTag('my_tag', attr=1)
-
-    dep = builder([tag])
-
-    tagged = cast(Tagged, world.get(CustomTag('my_tag')))
-    assert len(tagged) == 1
-    assert set(tagged.items()) == {(tag, world.get(dep))}
 
 
 @pytest.mark.parametrize('expectation, tags', [

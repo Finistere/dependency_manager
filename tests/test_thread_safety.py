@@ -83,7 +83,7 @@ def test_tagged_dependencies_instantiation_safety():
                     singleton=False,
                     tags=[tag])
 
-        tagged: Tagged = world.get(tag)
+        tagged: Tagged = world.get(Tagged.with_(tag))
         dependencies = []
 
         def worker():
