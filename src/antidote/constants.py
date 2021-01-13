@@ -54,7 +54,7 @@ class Constants(metaclass=ConstantsMeta, abstract=True):
         use either method :py:meth:`.copy` or
         :py:meth:`~.core.wiring.WithWiringMixin.with_wiring`.
         """
-        __slots__ = ('wiring', 'public', 'auto_cast')
+        __slots__ = ('wiring', 'auto_cast')
         wiring: Optional[Wiring]
         auto_cast: FrozenSet[type]
 

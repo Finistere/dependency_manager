@@ -126,6 +126,51 @@ necessary.
 
 
 
+Abstract Service / Factory
+==========================
+
+It is possible to define an abstract service or factory by simply adding
+:code:`abstract=True` as a metaclass argument:
+
+.. testcode:: recipes_abstract
+
+    from antidote import Service, Factory, Tag
+
+    tag = Tag()
+
+    class AbstractService(Service, abstract=True):
+        # Change default configuration
+        __antidote__ = Service.Conf(tags=[tag])
+
+    class AbstractFactory(Factory, abstract=True):
+        pass
+
+Abstract classes will not be registered, neither wired:
+
+.. doctest:: recipes_abstract
+
+    >>> from antidote import world
+    >>> world.get[AbstractService]()
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in ?
+    DependencyNotFoundError
+    >>> world.get[AbstractFactory]()
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in ?
+    DependencyNotFoundError
+
+In the actual implementation you only need to use :code:`copy()` on the configuration
+to use the newly defined defaults:
+
+.. testcode:: recipes_abstract
+
+    class MyService(AbstractService):
+        # Change default configuration
+        __antidote__ = AbstractService.__antidote__.copy(singleton=False)
+
+
+
+
 Use tags to retrieve multiple dependencies
 ==========================================
 
@@ -142,10 +187,15 @@ instance of :py:class:`.Tag`.
 
     tag = Tag()
 
-    class PluginA(Service):
+    # Specifying abstract tells Antidote to NOT register Plugin. It's considered
+    # to be an abstract class.
+    class Plugin(Service, abstract=True):
+        pass
+
+    class PluginA(Plugin):
         __antidote__ = Service.Conf(tags=[tag])
 
-    class PluginB(Service):
+    class PluginB(Plugin):
         __antidote__ = Service.Conf(tags=[tag])
 
 .. doctest:: recipes_tags
@@ -435,35 +485,3 @@ In a Flask app for example you would then just reset the scope after each reques
     def reset_request_scope():
         world.scopes.reset(REQUEST_SCOPE)
 
-
-
-Implicits
-=========
-
-Implicits can be defined through :py:func:`.world.implicits.set`:
-
-.. doctest:: recipes_implicits
-
-    >>> from antidote import world, factory
-    >>> class Dummy:
-    ...     pass
-    >>> @factory
-    ... def build_dummy() -> Dummy:
-    ...     return Dummy()
-    >>> world.implicits.set({Dummy: Dummy @ build_dummy})
-    >>> world.get(Dummy) is world.get(Dummy @ build_dummy)
-    True
-    >>> world.implicits.set({Dummy: Dummy @ build_dummy})
-    Traceback (most recent call last):
-      File "<stdin>", line 1, in ?
-    RuntimeError: Implicits have already been defined once.
-
-This can improve the readability of your code with :py:func:`.factory` or
-:py:func:`.implementation`. However as we lose the information of where the dependency is
-coming from, the implicits can only be defined once. Typically you would put it in the
-start-up code of your application.
-
-.. note::
-
-    It is *not* recommended to use implicits *initially* in your application. Only use it
-    once you really feel the need for it.

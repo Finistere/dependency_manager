@@ -230,3 +230,8 @@ def test_invalid_copy():
     conf = Factory.Conf()
     with pytest.raises(TypeError, match=".*both.*"):
         conf.copy(singleton=False, scope=None)
+
+
+def test_conf_repr():
+    conf = Factory.Conf()
+    assert "__init__" in repr(conf)

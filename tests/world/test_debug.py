@@ -40,29 +40,6 @@ def test_no_debug():
     )
 
 
-def test_implicits_debug():
-    prefix = "tests.world.test_debug.test_implicits_debug.<locals>"
-
-    with world.test.new():
-        class Interface:
-            pass
-
-        class Dummy(Interface, Service):
-            pass
-
-        world.implicits.set({Interface: Dummy})
-
-        assert_valid(
-            DebugTestCase(
-                value=Interface,
-                expected=f"""
-                Implicit: {prefix}.Interface -> {prefix}.Dummy
-                └── {prefix}.Dummy
-                    """,
-            )
-        )
-
-
 def test_implementation_debug():
     class Interface:
         pass
@@ -205,7 +182,22 @@ def test_wiring_debug():
         class Service1(Service):
             pass
 
-        class Dummy(Service):
+        class DummyA(Service):
+            __antidote__ = Service.Conf(wiring=None)
+
+            @inject
+            def __init__(self, service: Service1):
+                pass
+
+        assert_valid(DebugTestCase(
+            value=DummyA,
+            expected=f"""
+                {prefix}.DummyA
+                └── {prefix}.Service1
+            """
+        ))
+
+        class DummyB(Service):
             __antidote__ = Service.Conf().with_wiring(methods=['__init__', 'get'])
 
             def __init__(self, s: Service1):
@@ -215,9 +207,9 @@ def test_wiring_debug():
                 pass
 
         assert_valid(DebugTestCase(
-            value=Dummy,
+            value=DummyB,
             expected=f"""
-                {prefix}.Dummy
+                {prefix}.DummyB
                 ├── {prefix}.Service1
                 └── Method: get
                     └── {prefix}.Service1
@@ -252,7 +244,7 @@ def test_tag():
     prefix = "tests.world.test_debug.test_tag.<locals>"
 
     with world.test.new():
-        tag = Tag()
+        tag = Tag('dummy')
 
         class S1(Service):
             __antidote__ = Service.Conf(tags=[tag])
@@ -261,7 +253,7 @@ def test_tag():
             DebugTestCase(
                 value=Tagged.with_(tag),
                 expected=f"""
-                <∅> Tagged with Tag#{short_id(tag)}
+                <∅> Tagged with Tag('dummy')#{short_id(tag)}
                 └── {prefix}.S1
                 """
             )

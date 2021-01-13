@@ -14,6 +14,7 @@ from ..core.exceptions import DependencyNotFoundError
 # @formatter:on
 
 cdef extern from "Python.h":
+    PyObject*Py_None
     int PyDict_SetItem(PyObject *p, PyObject *key, PyObject *val) except -1
     PyObject*PyDict_GetItem(PyObject *p, PyObject *key)
     PyObject*PyObject_CallObject(PyObject *callable, PyObject *args) except NULL
@@ -23,56 +24,45 @@ cdef extern from "Python.h":
 @cython.final
 cdef class IndirectProvider(FastProvider):
     cdef:
-        dict __indirect
-        set __implementations
-        bint __implicits_registered
+        dict __implementations
 
     def __init__(self):
         super().__init__()
-        self.__implicits_registered = False
-        self.__implementations = set()
-        self.__indirect = dict()  # type: Dict[Hashable, Hashable]
+        self.__implementations = dict()
 
-    def __repr__(self):
-        return f"{type(self).__name__}(implementations={self.__implementations}, " \
-               f"indirect={self.__indirect}, implicits={self.__implicits_registered})"
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(" \
+               f"implementations={list(self.__implementations.keys())})"
 
     def clone(self, keep_singletons_cache: bool) -> IndirectProvider:
         p = IndirectProvider()
-        p.__implicits_registered = self.__implicits_registered
         p.__implementations = self.__implementations.copy()
-        p.__indirect = self.__indirect.copy()
         return p
 
-    def exists(self, dependency) -> bool:
-        return dependency in self.__indirect or dependency in self.__implementations
+    def exists(self, dependency: Hashable) -> bool:
+        return (isinstance(dependency, ImplementationDependency)
+                and dependency in self.__implementations)
 
     def maybe_debug(self, dependency: Hashable) -> Optional[DependencyDebug]:
         cdef:
             ImplementationDependency impl
 
-        if dependency in self.__implementations:
-            impl = <ImplementationDependency> dependency
-            if dependency in self.__indirect:
-                target = self.__indirect[dependency]
-            else:
-                target = impl.implementation()  # type: ignore
-
-            return DependencyDebug(debug_repr(dependency),
-                                   scope=Scope.singleton() if impl.permanent else None,
-                                   wired=[impl.implementation],  # type: ignore
-                                   dependencies=[target])
+        if not isinstance(dependency, ImplementationDependency):
+            return None
 
         try:
-            target = self.__indirect[dependency]
+            target = self.__implementations[dependency]
         except KeyError:
-            pass
-        else:
-            repr_d = debug_repr(dependency)
-            return DependencyDebug(f"Implicit: {repr_d} -> {debug_repr(target)}",
-                                   scope=Scope.singleton(),
-                                   dependencies=[target])
-        return None
+            return None
+
+        impl = <ImplementationDependency> dependency
+        if target is None:
+            target = impl.implementation()
+
+        return DependencyDebug(debug_repr(impl),
+                               scope=Scope.singleton() if impl.permanent else None,
+                               wired=[impl.implementation],  # type: ignore
+                               dependencies=[target])
 
     cdef fast_provide(self,
                       PyObject*dependency,
@@ -82,13 +72,15 @@ cdef class IndirectProvider(FastProvider):
             PyObject*ptr
             PyObject*target
 
-        ptr = PyDict_GetItem(<PyObject*> self.__indirect, dependency)
-        if ptr:
+        ptr = PyDict_GetItem(<PyObject*> self.__implementations, dependency)
+        if ptr is NULL:
+            return
+        elif ptr is not Py_None:
             (<RawContainer> container).fast_get(ptr, result)
             result.header |= header_flag_cacheable()
             if result.value is NULL:
                 raise DependencyNotFoundError(<object> ptr)
-        elif PySet_Contains(<PyObject*> self.__implementations, dependency):
+        else:
             target = PyObject_CallObject(
                 <PyObject*> (<ImplementationDependency> dependency).implementation,
                 NULL
@@ -101,24 +93,13 @@ cdef class IndirectProvider(FastProvider):
 
             if (<ImplementationDependency> dependency).permanent:
                 result.header |= header_flag_cacheable()
-                PyDict_SetItem(<PyObject*> self.__indirect,
+                PyDict_SetItem(<PyObject*> self.__implementations,
                                dependency,
                                target)
             else:
                 result.header = 0
 
             Py_XDECREF(target)
-
-    def register_implicits(self, dependency_to_target: Dict[Hashable, Hashable]) -> None:
-        assert isinstance(dependency_to_target, dict)
-
-        with self._bound_container_ensure_not_frozen():
-            if self.__implicits_registered:
-                raise RuntimeError(f"Implicits have already been defined once.")
-            for dependency in dependency_to_target.keys():
-                self._bound_container_raise_if_exists(dependency)
-            self.__implicits_registered = True
-            self.__indirect.update(dependency_to_target)
 
     def register_implementation(self,
                                 interface: type,
@@ -132,7 +113,7 @@ cdef class IndirectProvider(FastProvider):
         impl = ImplementationDependency(interface, implementation, permanent)
         with self._bound_container_ensure_not_frozen():
             self._bound_container_raise_if_exists(impl)
-            self.__implementations.add(impl)
+            self.__implementations[impl] = None
             return impl
 
 @cython.final

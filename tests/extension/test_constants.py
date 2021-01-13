@@ -160,3 +160,8 @@ def test_conf_copy(kwargs):
     conf = Constants.Conf().copy(**kwargs)
     for k, v in kwargs.items():
         assert getattr(conf, k) == v
+
+
+def test_conf_repr():
+    conf = Constants.Conf()
+    assert "__init__" in repr(conf)

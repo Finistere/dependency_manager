@@ -1,6 +1,6 @@
 import threading
 from typing import (Dict, Generic, Hashable, Iterable, Iterator, List,
-                    Optional, Sequence, TypeVar, Set)
+                    Optional, Sequence, TypeVar, Set, cast)
 
 from .._compatibility.typing import final
 from .._internal import API
@@ -15,68 +15,43 @@ class Tag(FinalImmutable):
     """
     Tags are a way to expose a dependency indirectly. Instead of explicitly
     defining a list of dependencies to retrieve, one can just mark those with
-    tags and retrieve them.
-
-    The only requirement for a tag is to be an instance of :py:class:`.Tag`.
+    tags and retrieve them. Typically used to support plugins or similar patterns where
+    you allow others to add functionnality.
 
     .. doctest:: providers_tag_Tag
 
-        >>> from antidote import Tag, Service, world
-        >>> tag = Tag()
-        >>> class Dummy(Service):
-        ...     __antidote__ = Service.Conf(tags=[tag])
-        >>> world.get(tag)
-        <...Tagged ...>
-        >>> # You can retrieve the tags and/or dependencies. Here we take both.
-        ... (t, dummy) = list(world.get(tag).items())[0]
-        >>> t is tag
-        True
-        >>> dummy is world.get(Dummy)
-        True
-
-    You may create your own subclasses to add additional information on your services.
-    You can create Tags will be grouped by the output of :py:meth:`.group`. Retrieved
-    dependencies will have their associated tag provided, so you can store information
-    in it.
-
-    .. doctest:: providers_tag_Tag_v2
-
         >>> from antidote import Tag, Service, world, Tagged
-        >>> class CustomTag(Tag):
-        ...     __slots__ = ('name',)  # __slots__ is recommended
-        ...     name: str  # For Mypy
-        ...
-        ...     def __init__(self, name: str):
-        ...         super().__init__(name=name)
-        ...
-        ...     def group(self):
-        ...         return self.name.split("_")[0]
-        ...
-        >>> class Dummy(Service):
-        ...     __antidote__ = Service.Conf(tags=[CustomTag(name="ref_dummy")])
-        >>> world.get[Tagged[CustomTag, object]](CustomTag("ref_any"))
-        <...Tagged ...>
-        >>> (tag, dummy) = list(world.get(CustomTag("ref_any")).items())[0]
-        >>> tag.name
-        'ref_dummy'
-        >>> dummy is world.get(Dummy)
+        >>> tag = Tag()
+        >>> class Plugin(Service):
+        ...     __antidote__ = Service.Conf(tags=[tag])
+        >>> tagged = world.get[Tagged[Plugin]](Tagged.with_(tag))
+        >>> list(tagged.values()) == [world.get(Plugin)]
         True
-
-    Note that tags are immutables, well as far it goes in Python ! Tags should be used to
-    group dependencies and eventually provides some *constants* information on them. It
-    is not intended to store any state in it.
 
     """
-    __slots__ = ()
+    __slots__ = ('name',)
+    name: str
+
+    def __init__(self, name: str = ''):
+        """
+        Args:
+            name: friendly name for easier debugging. Not used for anything else.
+        """
+        if not isinstance(name, str):
+            raise TypeError(f"name must be a str, not {type(name)}")
+        super().__init__(name)
 
     def __repr__(self) -> str:
-        return f"Tag#{short_id(self)}"
+        if self.name:
+            return f"Tag({self.name!r})#{short_id(self)}"
+        else:
+            return f"Tag#{short_id(self)}"
 
 
 @API.public
 class DuplicateTagError(AntidoteError):
     """
-    A dependency has multiple times the same tag.
+    The same tag is used twice on the same dependency.
     """
 
     def __init__(self, tag: Tag, dependency: Hashable) -> None:
@@ -91,17 +66,17 @@ D = TypeVar('D')
 #       To be added again once 3.6 support ends.
 @API.public
 @final
-class Tagged(Immutable, Generic[T, D], metaclass=ImmutableGenericMeta):
+class Tagged(Immutable, Generic[D], metaclass=ImmutableGenericMeta):
     """
-    Collection containing dependencies and their tags. Dependencies are lazily
-    instantiated.
+    Collection containing all tagged dependencies with the specified tag.
+    Dependencies are lazily instantiated.
     """
     __slots__ = ('tag', '__lock', '__container', '__dependencies', '__instances')
     tag: Tag
     __lock: threading.RLock
     __container: Container
     __dependencies: List[object]
-    __instances: List[object]
+    __instances: List[D]
 
     @staticmethod
     def with_(tag: Tag) -> object:
@@ -139,7 +114,7 @@ class Tagged(Immutable, Generic[T, D], metaclass=ImmutableGenericMeta):
                     # If not other thread has already added the instance.
                     if i == len(self.__instances):
                         self.__instances.append(
-                            self.__container.get(self.__dependencies[i])
+                            cast(D, self.__container.get(self.__dependencies[i]))
                         )
                 yield self.__instances[i]
             i += 1
@@ -169,8 +144,8 @@ class TagProvider(Provider[TagDependency]):
         return p
 
     def exists(self, dependency: Hashable) -> bool:
-        return isinstance(dependency, TagDependency) \
-               and dependency.tag in self.__tag_to_tagged
+        return (isinstance(dependency, TagDependency)
+                and dependency.tag in self.__tag_to_tagged)
 
     def debug(self, dependency: TagDependency) -> DependencyDebug:
         return DependencyDebug(

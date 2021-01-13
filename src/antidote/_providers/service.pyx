@@ -12,9 +12,9 @@ from .._internal.utils import debug_repr
 from ..core import DependencyDebug
 
 cdef extern from "Python.h":
+    PyObject*Py_True
     int PyObject_IsInstance(PyObject *inst, PyObject *cls) except -1
     PyObject*PyDict_GetItem(PyObject *p, PyObject *key)
-    PyObject*Py_True
     PyObject*PyObject_Call(PyObject *callable, PyObject *args, PyObject *kwargs) except NULL
     PyObject*PyObject_CallObject(PyObject *callable, PyObject *args) except NULL
 

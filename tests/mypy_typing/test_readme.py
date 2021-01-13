@@ -123,14 +123,6 @@ def test_readme():
         api_key=conf.IMDB_API_KEY,  # <=> conf.get('imdb.api_key')
     )))
 
-    # Can only be defined once.
-    world.implicits.set({
-        ImdbAPI: ImdbAPI @ imdb_factory,
-        MovieDB: MovieDB @ current_movie_db
-    })
-    # Now works without specifying anything
-    world.get[MovieDB]()
-
     # When testing you can also override locally some dependencies:
     with world.test.clone(keep_singletons=True):
         world.test.override.singleton(Conf.IMDB_HOST, 'other host')

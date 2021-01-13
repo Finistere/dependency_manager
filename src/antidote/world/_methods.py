@@ -93,8 +93,6 @@ def provider(p: P) -> P:
         The same class, unmodified.
 
     """
-    import inspect
-
     if not (inspect.isclass(p) and issubclass(p, RawProvider)):
         raise TypeError(f"Provider must be a subclass of "
                         f"RawProvider, not {p}")
@@ -260,36 +258,3 @@ def reset(scope: Scope) -> None:
         raise ValueError(f"Unknown scope {scope}. Only scopes created through "
                          f"world.scopes.new() are supported.")
     return container.reset_scope(scope)
-
-
-@API.public
-def implicits_set(dependency_to_target: Dict[Hashable, Hashable]) -> None:
-    """
-    Declare one or multiple singleton dependencies with its associated value.
-
-    .. doctest:: world_singletons_add
-
-        >>> from antidote import world
-        >>> world.singletons.add("test", 1)
-        >>> world.get[int]("test")
-        1
-        >>> world.singletons.add({'host': 'example.com', 'port': 80})
-        >>> world.get[str]("host")
-        'example.com'
-
-    Args:
-        dependency: Singleton to declare, must be hashable. If a dict is provided, it'll
-            be treated as a dictionary of singletons to add.
-        value: Associated value for the dependency.
-
-    """
-    if not isinstance(dependency_to_target, dict):
-        raise TypeError(f"A dictionary of dependencies to their target must be provided, "
-                        f"not {type(dependency_to_target)}")
-    for dependency, target in dependency_to_target.items():
-        if isinstance(dependency, type) and inspect.isclass(dependency):
-            # Sanity check for classes that we do inject subclasses.
-            # Injecting incoherent objects should be harder than using implicits. :)
-            validate_provided_class(target, expected=dependency)
-
-    get[IndirectProvider]().register_implicits(dependency_to_target)

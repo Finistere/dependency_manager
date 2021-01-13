@@ -27,6 +27,13 @@ def test_tag():
     with pytest.raises(AttributeError):
         Tag().x = 1
 
+    tagB = Tag('friendly')
+    assert tagB.name == 'friendly'
+    assert repr('friendly') in repr(tagB)
+
+    with pytest.raises(TypeError):
+        Tag(object())
+
 
 def test_repr(provider: TagProvider):
     class A:

@@ -44,7 +44,7 @@ It provides the following features:
       a good chance you can implement it yourself quickly.
     - scope support
 - Maintainability
-    - The different kinds of dependencies are designed to be easy to track back. Finding where a
+    - The different kinds of dependencies are designed to be easy to track back. Finding where and how a
       dependency is defined is easy.
     - Overriding dependencies (duplicates) and injecting twice will raise an exception.
     - Dependencies can be frozen, which blocks any new definitions.
@@ -215,21 +215,6 @@ That looks all good, but what about testability ?
     with world.test.clone(keep_singletons=True):
         world.test.override.singleton(Conf.IMDB_HOST, 'other host')
         f()
-
-You probably noticed the custom syntax for :code:`MovieDB @ current_movie_db` and
-:code:`ImdbAPI @ imdb_factory`. It ensures that you can always track back where and how
-the dependency is defined. As it can be a bit heavy, Antidote allows to define some
-implicit dependencies, but only once:
-
-.. code-block:: python
-
-    # Can only be defined once.
-    world.implicits.set({
-        ImdbAPI: ImdbAPI @ imdb_factory,
-        MovieDB: MovieDB @ current_movie_db
-    })
-    # Now works without specifying anything
-    world.get[MovieDB]()
 
 If you ever need to debug your dependency injections, Antidote also provides a tool to
 have a quick summary of what is actually going on:

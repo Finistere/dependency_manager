@@ -114,7 +114,7 @@ class Factory(metaclass=FactoryMeta, abstract=True):
         either method :py:meth:`.copy` or
         :py:meth:`.core.wiring.WithWiringMixin.with_wiring`.
         """
-        __slots__ = ('wiring', 'scope', 'tags', 'public')
+        __slots__ = ('wiring', 'scope', 'tags')
         wiring: Optional[Wiring]
         scope: Optional[Scope]
         tags: Optional[Tuple[Tag]]
