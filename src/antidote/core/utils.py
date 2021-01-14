@@ -1,13 +1,14 @@
-from typing import cast, Generic, Hashable, Optional, Sequence, TypeVar
+from typing import cast, Generic, Hashable, Optional, Sequence, TypeVar, Union
 
 from .container import Scope
 from .._compatibility.typing import final
 from .._internal import API
-from .._internal.utils import FinalImmutable, Immutable
+from .._internal.utils import FinalImmutable, Immutable, Default
 from .._internal.utils.debug import debug_repr
 from .._internal.utils.immutable import ImmutableGenericMeta
 
 T = TypeVar('T')
+_SENTINEL = object()
 
 
 @API.public
@@ -34,20 +35,20 @@ class Dependency(Immutable, Generic[T], metaclass=ImmutableGenericMeta):
     unwrapped: Hashable
     """Actual dependency to be retrieved"""
 
-    def __init__(self, dependency: Hashable) -> None:
+    def __init__(self, __dependency: Hashable) -> None:
         """
         Args:
-            dependency: actual dependency to be retrieved.
+            __dependency: actual dependency to be retrieved.
         """
-        super().__init__(unwrapped=dependency)
+        super().__init__(unwrapped=__dependency)
 
-    def get(self) -> T:
+    def get(self, *, default: Union[T, Default] = Default.sentinel) -> T:
         """
         Returns:
             dependency value retrieved from :py:mod:`~..world`.
         """
         from antidote import world
-        return cast(T, world.get(self.unwrapped))
+        return cast(T, world.get(self.unwrapped, default=default))
 
     def __hash__(self) -> int:
         return hash(self.unwrapped)
@@ -76,20 +77,20 @@ class DependencyDebug(FinalImmutable):
     dependencies: Sequence[Hashable]
 
     def __init__(self,
-                 info: str,
+                 __info: str,
                  *,
                  scope: Optional[Scope] = None,
                  wired: Sequence[object] = tuple(),
                  dependencies: Sequence[Hashable] = tuple()):
         """
         Args:
-            info: Short and concise information on the dependency, just enough to identify
-                clearly which one it is.
+            __info: Short and concise information on the dependency, just enough to
+                identify clearly which one it is.
             scope: Scope of the dependency.
             wired: Every class or function that may have been wired for this dependency.
             dependencies: Any transient dependency, so dependencies of this dependency.
         """
-        super().__init__(info, scope, wired, dependencies)
+        super().__init__(__info, scope, wired, dependencies)
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, DependencyDebug) \

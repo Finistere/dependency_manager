@@ -17,9 +17,9 @@ _ID_MASK = id(object())
 
 
 @API.private
-def short_id(obj: object) -> str:
+def short_id(__obj: object) -> str:
     """ Produces a short, human readable, representation of the id of an object. """
-    n = id(obj) ^ _ID_MASK
+    n = id(__obj) ^ _ID_MASK
     return (base64
             .b64encode(n.to_bytes(8, byteorder='little'))
             .decode('ascii')
@@ -28,25 +28,25 @@ def short_id(obj: object) -> str:
 
 
 @API.private
-def debug_repr(obj: object) -> str:
+def debug_repr(__obj: object) -> str:
     from ..wrapper import is_wrapper
     try:
-        return str(obj.__antidote_debug_repr__())  # type: ignore
+        return str(__obj.__antidote_debug_repr__())  # type: ignore
     except Exception:
         pass
-    if (isinstance(obj, type) and inspect.isclass(obj)) \
-            or inspect.isfunction(obj) \
-            or is_wrapper(obj):
-        module = (obj.__module__ + ".") if obj.__module__ != "__main__" else ""
-        return f"{module}{obj.__qualname__}"  # type: ignore
-    return repr(obj)
+    if (isinstance(__obj, type) and inspect.isclass(__obj)) \
+            or inspect.isfunction(__obj) \
+            or is_wrapper(__obj):
+        module = (__obj.__module__ + ".") if __obj.__module__ != "__main__" else ""
+        return f"{module}{__obj.__qualname__}"  # type: ignore
+    return repr(__obj)
 
 
 @API.private
-def get_injections(func: object) -> Sequence[object]:
+def get_injections(__func: object) -> Sequence[object]:
     from ..wrapper import get_wrapper_dependencies
     try:
-        return get_wrapper_dependencies(func)  # type: ignore
+        return get_wrapper_dependencies(__func)  # type: ignore
     except TypeError:
         return []
 

@@ -116,6 +116,9 @@ Injection
 .. automodule:: antidote.core.injection
     :members: inject, Arg
 
+.. automodule:: antidote.annotations
+    :members:
+
 .. automodule:: antidote.core.wiring
     :members: Wiring, wire, WithWiringMixin
 

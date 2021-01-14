@@ -35,7 +35,7 @@ def init() -> None:
     if __container is None:
         with __container_lock:
             if __container is None:
-                from .utils.world import new_container
+                from antidote._internal.world import new_container
                 __container = new_container()
 
 

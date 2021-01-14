@@ -1,4 +1,3 @@
-import builtins
 import collections.abc as c_abc
 import inspect
 from typing import (Any, Callable, cast, Dict, Hashable, Iterable, Mapping, overload,
@@ -9,8 +8,6 @@ from .._internal import API
 from .._internal.argspec import Arguments
 from .._internal.wrapper import (build_wrapper, get_wrapped, Injection,
                                  InjectionBlueprint, is_wrapper)
-
-_BUILTINS_TYPES = {e for e in builtins.__dict__.values() if isinstance(e, type)}
 
 if TYPE_CHECKING:
     from .injection import DEPENDENCIES_TYPE
@@ -116,21 +113,24 @@ def _build_injection_blueprint(arguments: Arguments,
 
     Used by inject()
     """
+    from .annotations import IGNORE_SENTINEL
     use_names = use_names if use_names is not None else False
     use_type_hints = use_type_hints if use_type_hints is not None else True
 
     arg_to_dependency = _build_arg_to_dependency(arguments, dependencies)
     type_hints = _build_type_hints(arguments, use_type_hints)
     dependency_names = _build_dependency_names(arguments, use_names)
+    resolved_dependencies = []
 
-    resolved_dependencies = [
-        arg_to_dependency.get(
-            arg.name,
-            type_hints.get(arg.name,
+    for arg in arguments:
+        d = type_hints.get(arg.name,
                            arg.name if arg.name in dependency_names else None)
-        )
-        for arg in arguments
-    ]
+        # Specifying explicitly Ignore in the type_hints has priority over
+        # everything else.
+        if d is IGNORE_SENTINEL:
+            resolved_dependencies.append(None)
+        else:
+            resolved_dependencies.append(arg_to_dependency.get(arg.name, d))
 
     return InjectionBlueprint(tuple(
         Injection(arg_name=arg.name,
@@ -155,7 +155,9 @@ def _build_arg_to_dependency(arguments: Arguments,
         arg_to_dependency = {arg.name: dependencies.format(arg_name=arg.name)
                              for arg in arguments.without_self}
     elif callable(dependencies):
-        arg_to_dependency = {arg.name: dependencies(Arg(arg.name, arg.type_hint))
+        arg_to_dependency = {arg.name: dependencies(Arg(arg.name,
+                                                        arg.type_hint,
+                                                        arg.type_hint_with_extras))
                              for arg in arguments.without_self}
     elif isinstance(dependencies, c_abc.Mapping):
         _check_valid_arg_names(dependencies.keys(), arguments)
@@ -174,16 +176,14 @@ def _build_arg_to_dependency(arguments: Arguments,
                         f'dependencies, not {type(dependencies)!r}')
 
     # Remove any None as they would hide type_hints and use_names.
-    return {
-        k: v
-        for k, v in arg_to_dependency.items()
-        if v is not None
-    }
+    return {k: v for k, v in arg_to_dependency.items() if v is not None}
 
 
 @API.private
 def _build_type_hints(arguments: Arguments,
                       use_type_hints: Union[bool, Iterable[str]]) -> Dict[str, Hashable]:
+    from .annotations import extract_argument_dependency
+
     if use_type_hints is True:
         type_hints = {arg.name: arg.type_hint for arg in arguments.without_self}
     elif use_type_hints is False:
@@ -199,25 +199,13 @@ def _build_type_hints(arguments: Arguments,
         raise TypeError(f"Only an iterable or a boolean is supported for "
                         f"use_type_hints, not {type(use_type_hints)!r}")
 
+    arg_to_dependency = {}
     for arg_name in list(type_hints.keys()):
-        type_hint = type_hints[arg_name]
-        if getattr(type_hint, '__origin__', None) is Union \
-                and len(type_hint.__args__) == 2:  # type: ignore
-            a = type_hint.__args__  # type: ignore
-            if isinstance(None, a[1]):
-                type_hints[arg_name] = a[0]
+        dependency = extract_argument_dependency(arguments[arg_name])
+        if dependency is not None:
+            arg_to_dependency[arg_name] = dependency
 
-    # Any object from builtins or typing do not carry any useful information
-    # and thus must not be used as dependency IDs. So they might as well be
-    # skipped entirely. Moreover they hide use_names.
-    return {
-        arg_name: type_hint
-        for arg_name, type_hint in type_hints.items()
-        if getattr(type_hint, '__module__', '') != 'typing'
-           and type_hint not in _BUILTINS_TYPES  # noqa: E131
-           and type_hint is not None  # noqa: E131
-           and inspect.isclass(type_hint)  # noqa: E131
-    }
+    return arg_to_dependency
 
 
 @API.private

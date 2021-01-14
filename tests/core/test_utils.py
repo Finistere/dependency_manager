@@ -18,17 +18,29 @@ def test_dependency_instance():
 
 
 def test_dependency_debug():
-    ref = DependencyDebug(info="info", scope=Scope.singleton(), wired=[1],
+    ref = DependencyDebug("info",
+                          scope=Scope.singleton(),
+                          wired=[1],
                           dependencies=[2])
-    assert ref == DependencyDebug(info="info", scope=Scope.singleton(), wired=[1],
+    assert ref == DependencyDebug("info",
+                                  scope=Scope.singleton(),
+                                  wired=[1],
                                   dependencies=[2])
-    assert ref != DependencyDebug(info="info2", scope=Scope.singleton(), wired=[1],
+    assert ref != DependencyDebug("info2",
+                                  scope=Scope.singleton(),
+                                  wired=[1],
                                   dependencies=[2])
-    assert ref != DependencyDebug(info="info", scope=None, wired=[1],
+    assert ref != DependencyDebug("info",
+                                  scope=None,
+                                  wired=[1],
                                   dependencies=[2])
-    assert ref != DependencyDebug(info="info", scope=Scope.singleton(), wired=[10],
+    assert ref != DependencyDebug("info",
+                                  scope=Scope.singleton(),
+                                  wired=[10],
                                   dependencies=[2])
-    assert ref != DependencyDebug(info="info", scope=Scope.singleton(), wired=[1],
+    assert ref != DependencyDebug("info",
+                                  scope=Scope.singleton(),
+                                  wired=[1],
                                   dependencies=[20])
 
 

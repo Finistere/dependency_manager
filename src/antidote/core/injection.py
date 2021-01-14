@@ -2,7 +2,6 @@ import collections.abc as c_abc
 from typing import (Any, Callable, Hashable, Iterable, Mapping,
                     Optional, overload, Sequence, TypeVar, Union)
 
-from ._injection import raw_inject
 from .._compatibility.typing import final
 from .._internal import API
 from .._internal.utils import FinalImmutable
@@ -18,11 +17,15 @@ class Arg(FinalImmutable):
     Represents an argument (name and type hint) if you need a very custom injection
     logic.
     """
-    __slots__ = ('name', 'type_hint')
+    __slots__ = ('name', 'type_hint', 'type_hint_with_extras')
     name: str
     """Name of the argument"""
     type_hint: Any
     """Type hint of the argument if any"""
+    type_hint_with_extras: Any
+    """
+    Type hint of the argument if any with include_extras=True, so with annotations.
+    """
 
 
 # This type is experimental.
@@ -154,6 +157,7 @@ def inject(func: AnyF = None,
         argument :code:`func` was supplied.
 
     """
+    from ._injection import raw_inject
     if func is None:
         return raw_inject(dependencies=dependencies,
                           use_names=use_names,

@@ -1,4 +1,4 @@
-from antidote._internal.utils.world import new_container
+from antidote._internal.world import new_container
 from antidote.core import Container
 
 

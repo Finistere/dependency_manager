@@ -1,14 +1,21 @@
 import inspect
-from typing import Callable, get_type_hints, Iterator, List, Sequence, Set, Union
+from typing import Callable, get_type_hints, Iterator, List, Sequence, Set, Union, Any, \
+    Dict
+
+from antidote._internal.utils import FinalImmutable
 
 
-class Argument:
-    def __init__(self, name: str, has_default: bool, type_hint: object) -> None:
-        self.name = name
-        self.has_default = has_default
-        self.type_hint = type_hint
+class Argument(FinalImmutable):
+    __slots__ = ('name', 'has_default', 'type_hint', 'type_hint_with_extras')
+    name: str
+    has_default: bool
+    type_hint: Any
+    type_hint_with_extras: Any
 
-    def __repr__(self) -> str:
+    def __repr__(self):
+        return f"Argument({self})"
+
+    def __str__(self) -> str:
         type_hint = getattr(self.type_hint, "__name__", repr(self.type_hint))
         common = f'{self.name}:{type_hint}'
         return common + " = ?" if self.has_default else common
@@ -16,6 +23,12 @@ class Argument:
 
 class Arguments:
     """ Used when generating the injection wrapper """
+    arguments: Sequence[Argument]
+    has_var_positional: bool
+    has_var_keyword: bool
+    has_self: bool
+    without_self: 'Arguments'
+    __name_to_argument: Dict[str, Argument]
 
     @classmethod
     def from_callable(cls, f: Union[Callable[..., object], staticmethod, classmethod]
@@ -36,6 +49,7 @@ class Arguments:
 
         # typing is used, as lazy evaluation is not done properly with Signature.
         type_hints = get_type_hints(func)
+        extra_type_hints = get_type_hints(func, include_extras=True)
 
         for name, parameter in inspect.signature(func).parameters.items():
             if parameter.kind is parameter.VAR_POSITIONAL:
@@ -46,7 +60,8 @@ class Arguments:
                 arguments.append(Argument(
                     name=name,
                     has_default=parameter.default is not parameter.empty,
-                    type_hint=type_hints.get(name)
+                    type_hint=type_hints.get(name),
+                    type_hint_with_extras=extra_type_hints.get(name)
                 ))
 
         return Arguments(arguments=tuple(arguments),
@@ -60,8 +75,8 @@ class Arguments:
                  has_var_keyword: bool,
                  has_self: bool):
         self.arguments = arguments
-        self.name_to_argument = dict(((arg.name, arg)
-                                      for arg in arguments))
+        self.__name_to_argument = dict(((arg.name, arg)
+                                        for arg in arguments))
         self.has_var_positional = has_var_positional
         self.has_var_keyword = has_var_keyword
         self.has_self = has_self
@@ -74,10 +89,10 @@ class Arguments:
 
     @property
     def arg_names(self) -> Set[str]:
-        return set(self.name_to_argument.keys())
+        return set(self.__name_to_argument.keys())
 
     def __repr__(self) -> str:
-        args = [repr(arg) for arg in self.name_to_argument.values()]
+        args = [str(arg) for arg in self.__name_to_argument.values()]
         if self.has_var_positional:
             args.append("*args")
         if self.has_var_keyword:
@@ -87,14 +102,14 @@ class Arguments:
 
     def __getitem__(self, index: Union[str, int]) -> Argument:
         if isinstance(index, str):
-            return self.name_to_argument[index]
+            return self.__name_to_argument[index]
         elif isinstance(index, int):
             return self.arguments[index]
         else:
             raise TypeError(f"Unsupported index {index!r}")
 
     def __contains__(self, name: str) -> bool:
-        return name in self.name_to_argument
+        return name in self.__name_to_argument
 
     def __len__(self) -> int:
         return len(self.arguments)

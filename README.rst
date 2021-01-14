@@ -248,6 +248,23 @@ have a quick summary of what is actually going on:
 Hooked ? Check out the documentation ! There are still features not presented here !
 
 
+Alternatives
+============
+
+The most popular libraries I know of are:
+
+- dependency_injector_:
+- pinject_:
+- injector_:
+- python_inject_:
+
+There also a lot of less known dependency injection libraries in Python. Some of them
+
+.. _dependency_injector: https://python-dependency-injector.ets-labs.org/introduction/di_in_python.html
+.. _pinject: https://github.com/google/pinject
+.. _injector: https://github.com/alecthomas/injector
+.. _python_inject: https://github.com/ivankorobkov/python-inject
+
 Cython
 ======
 
@@ -262,7 +279,7 @@ You can avoid the Cython version from PyPI with the following:
 
     pip install --no-binary antidote
 
-Note that PyPy is tested with the pure Python version, not the Cython one.
+Beware that PyPy is only tested with the pure Python version, not the Cython one.
 
 
 Documentation

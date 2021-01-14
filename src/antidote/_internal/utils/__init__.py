@@ -11,6 +11,11 @@ Im = TypeVar('Im', bound=Immutable)
 
 
 @API.private
+class Default(enum.Enum):
+    sentinel = object()
+
+
+@API.private
 class Copy(enum.Enum):
     IDENTICAL = object()
 
@@ -57,4 +62,4 @@ def raw_getattr(cls: type, attr: str, with_super: bool = False) -> object:
 
 
 __all__ = ['debug_repr', 'short_id', 'FinalImmutable', 'Immutable', 'AbstractMeta',
-           'FinalMeta', 'SlotRecord', 'API', 'Copy', 'raw_getattr']
+           'FinalMeta', 'SlotRecord', 'API', 'Default', 'Copy', 'raw_getattr']

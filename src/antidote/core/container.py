@@ -220,21 +220,10 @@ class RawProvider:
     @API.private
     @final
     @contextmanager
-    def _bound_container_ensure_not_frozen(self) -> Iterator[None]:
+    def _bound_container_locked(self, *, freezing: bool = False) -> Iterator[None]:
         container = self.__bound_container()
         if container is not None:
-            with container.ensure_not_frozen():
-                yield
-        else:
-            yield
-
-    @API.private
-    @final
-    @contextmanager
-    def _bound_container_locked(self) -> Iterator[None]:
-        container = self.__bound_container()
-        if container is not None:
-            with container.locked():
+            with container.locked(freezing=freezing):
                 yield
         else:
             yield
@@ -271,8 +260,8 @@ class RawProvider:
 class RawContainer(Container):
     def __init__(self) -> None:
         self._dependency_stack = DependencyStack()
+        self._registration_lock = threading.RLock()
         self._instantiation_lock = threading.RLock()
-        self._freeze_lock = threading.RLock()
 
         self.__frozen = False
         self.__singletons: Dict[object, object] = dict()
@@ -299,25 +288,21 @@ class RawContainer(Container):
         return self.__providers.copy()
 
     @contextmanager
-    def locked(self) -> Iterator[None]:
-        with self._freeze_lock, self._instantiation_lock:
-            yield
-
-    @contextmanager
-    def ensure_not_frozen(self) -> Iterator[None]:
-        with self._freeze_lock:
-            if self.__frozen:
+    def locked(self, *, freezing: bool = False) -> Iterator[None]:
+        assert isinstance(freezing, bool)
+        with self._registration_lock, self._instantiation_lock:
+            if freezing and self.__frozen:
                 raise FrozenWorldError()
             yield
 
     def freeze(self) -> None:
-        with self._freeze_lock:
+        with self._registration_lock:
             if self.__frozen:
                 raise FrozenWorldError("Container is already frozen !")
             self.__frozen = True
 
     def add_provider(self, provider_cls: Type[RawProvider]) -> None:
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             assert all(provider_cls != type(p) for p in self.__providers)
             provider = provider_cls()
             setattr(provider, _CONTAINER_REF_ATTR, ref(self))
@@ -325,14 +310,14 @@ class RawContainer(Container):
             self.__singletons[provider_cls] = provider
 
     def add_singletons(self, dependencies: Mapping[Hashable, object]) -> None:
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             for k, v in dependencies.items():
                 self.raise_if_exists(k)
             self.__singletons.update(dependencies)
 
     def create_scope(self, name: str) -> Scope:
         scope = Scope(name)  # Name is only a helper, not a identifier by itself.
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             assert all(s.name != name for s in self.__scopes.keys())
             assert len(self.__scopes) < 255  # Consistency with Cython.
             self.__scopes[scope] = dict()
@@ -340,10 +325,10 @@ class RawContainer(Container):
 
     def reset_scope(self, scope: Scope) -> None:
         with self._instantiation_lock:
-            self.__scopes[scope] = dict()
+            self.__scopes[scope].clear()
 
     def raise_if_exists(self, dependency: Hashable) -> None:
-        with self._freeze_lock:
+        with self._registration_lock:
             if dependency in self.__singletons:
                 raise DuplicateDependencyError(
                     f"{dependency!r} has already been defined as a singleton pointing "

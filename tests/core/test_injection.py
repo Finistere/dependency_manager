@@ -5,7 +5,8 @@ import pytest
 
 from antidote import world
 from antidote._internal.argspec import Arguments
-from antidote.core.injection import inject, raw_inject, validate_injection
+from antidote.core._injection import raw_inject
+from antidote.core.injection import inject, validate_injection
 from antidote.exceptions import DependencyNotFoundError, DoubleInjectionError
 
 

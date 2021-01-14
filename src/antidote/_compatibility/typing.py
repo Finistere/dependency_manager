@@ -1,5 +1,10 @@
 import sys
 
+if sys.version_info < (3, 9):
+    from typing_extensions import Annotated
+else:
+    from typing import Annotated
+
 if sys.version_info < (3, 8):
     from typing_extensions import final, Protocol
 else:
@@ -11,4 +16,4 @@ else:
     class GenericMeta(type):
         pass
 
-__all__ = ['final', 'Protocol', 'GenericMeta']
+__all__ = ['final', 'Protocol', 'GenericMeta', 'Annotated']

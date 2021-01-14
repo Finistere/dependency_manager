@@ -197,14 +197,14 @@ def test_freeze(container: RawContainer):
         container.add_singletons({'test': object()})
 
 
-def test_ensure_not_frozen(container: RawContainer):
-    with container.ensure_not_frozen():
+def test_freezing_locked(container: RawContainer):
+    with container.locked(freezing=True):
         pass
 
     container.freeze()
 
     with pytest.raises(FrozenWorldError):
-        with container.ensure_not_frozen():
+        with container.locked(freezing=True):
             pass
 
 

@@ -115,7 +115,7 @@ def test_world_safety():
 
 def test_state_init_safety():
     from antidote._internal import state
-    from antidote._internal.utils import world as world_utils
+    from antidote._internal import world as world_utils
 
     old_new_container = world_utils.new_container
 
