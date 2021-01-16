@@ -10,7 +10,7 @@ with open(str(here / 'README.rst'), 'r') as f:
 
 ext_modules = []
 install_requires = [
-    'typing_extensions; python_version < "3.8.0"'
+    'typing_extensions; python_version < "3.9.0"'
 ]
 
 # Ideally this would be done with a installation flag...

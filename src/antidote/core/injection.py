@@ -183,9 +183,7 @@ def validate_injection(dependencies: DEPENDENCIES_TYPE = None,
         )
     if isinstance(dependencies, str):
         if "{arg_name}" not in dependencies:
-            raise ValueError("Missing formatting parameter {arg_name} in dependencies. "
-                             "If you really want a constant injection, "
-                             "consider using a defaultdict.")
+            raise ValueError("Missing formatting parameter {arg_name} in dependencies.")
     if isinstance(dependencies, c_abc.Mapping):
         if not all(isinstance(k, str) for k in dependencies.keys()):
             raise TypeError("Dependencies keys must be argument names (str)")

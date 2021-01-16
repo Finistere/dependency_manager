@@ -113,15 +113,23 @@ Core
 Injection
 ---------
 
+Inject
+^^^^^^
 .. automodule:: antidote.core.injection
     :members: inject, Arg
 
+Annotations
+^^^^^^^^^^^
 .. automodule:: antidote.annotations
     :members:
 
+Wiring
+^^^^^^
 .. automodule:: antidote.core.wiring
     :members: Wiring, wire, WithWiringMixin
 
+Utility
+^^^^^^^
 .. autoclass:: antidote.core.utils.Dependency
     :members:
 

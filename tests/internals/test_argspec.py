@@ -313,3 +313,10 @@ def test_magic_methods_arguments():
 def test_invalid_callable():
     with pytest.raises(TypeError):
         Arguments.from_callable(object())
+
+
+def test_repr_argument():
+    arg = Argument(name='x', has_default=True, type_hint=int,
+                   type_hint_with_extras='found me!')
+    assert 'x:int =' in repr(arg)
+    assert arg.type_hint_with_extras in repr(arg)

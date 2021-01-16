@@ -42,13 +42,13 @@ class Dependency(Immutable, Generic[T], metaclass=ImmutableGenericMeta):
         """
         super().__init__(unwrapped=__dependency)
 
-    def get(self, *, default: Union[T, Default] = Default.sentinel) -> T:
+    def get(self) -> T:
         """
         Returns:
             dependency value retrieved from :py:mod:`~..world`.
         """
         from antidote import world
-        return cast(T, world.get(self.unwrapped, default=default))
+        return cast(T, world.get(self.unwrapped))
 
     def __hash__(self) -> int:
         return hash(self.unwrapped)

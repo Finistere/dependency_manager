@@ -1,7 +1,8 @@
 import functools
 import inspect
-from typing import Callable, cast, Dict, get_type_hints, Hashable, Tuple, Type
+from typing import Callable, cast, Dict, Hashable, Tuple, Type
 
+from ._compatibility.typing import get_type_hints
 from ._internal import API
 from ._internal.utils import AbstractMeta, FinalImmutable
 from ._providers import FactoryProvider, TagProvider

@@ -1,9 +1,11 @@
-import typing
+import itertools
 from contextlib import contextmanager
+from typing import Union, Optional, Sequence
 
 import pytest
 
-from antidote import world
+from antidote import world, Ignore, Get, FromArg, UseArgName, FromArgName, From
+from antidote._compatibility.typing import Annotated
 from antidote._internal.argspec import Arguments
 from antidote.core._injection import raw_inject
 from antidote.core.injection import inject, validate_injection
@@ -284,7 +286,7 @@ def test_with_type_hints(injector, expected, kwargs):
                          [str, int, float, set, list, dict, complex, type, tuple, bytes,
                           bytearray]
                          # typing
-                         + [typing.Optional, typing.Sequence]
+                         + [Optional, Sequence]
                          # not a class / weird stuff
                          + [1, lambda x: x, object()])
 def test_ignored_type_hints(injector, type_hint):
@@ -322,24 +324,24 @@ def test_none_optional_support(injector):
         return x
 
     @injector
-    def g(x: typing.Optional[Service] = None):
+    def g(x: Optional[Service] = None):
         return x
 
     @injector
-    def h(x: Dummy, y: typing.Optional[Service] = None):
+    def h(x: Dummy, y: Optional[Service] = None):
         return y
 
     @injector
-    def f2(x: typing.Union[Service, Dummy]):
+    def f2(x: Union[Service, Dummy]):
         pass
 
     with world.test.empty():
         s = Service()
         world.singletons.add(Dummy, Dummy())
         world.singletons.add(Service, s)
-        assert s == f()
-        assert s == g()
-        assert s == h()
+        assert f() is s
+        assert g() is s
+        assert h() is s
         with pytest.raises(TypeError):
             f2()
 
@@ -348,6 +350,109 @@ def test_none_optional_support(injector):
         assert f() is None
         assert g() is None
         assert h() is None
+
+
+def test_annotations(injector):
+    class Dummy:
+        pass
+
+    with world.test.empty():
+        @injector
+        def custom_annotated(x: Annotated[Dummy, object()]):
+            return x
+
+        world.singletons.add(Dummy, Dummy())
+        assert custom_annotated() is world.get(Dummy)
+
+    with world.test.empty():
+        @injector
+        def optional_annotated(x: Annotated[Dummy, object()] = None):
+            return x
+
+        world.singletons.add(Dummy, Dummy())
+        assert optional_annotated() is world.get(Dummy)
+
+    with world.test.empty():
+        @injector
+        def ignore(x: Ignore[Dummy] = None):
+            return x
+
+        world.singletons.add(Dummy, Dummy())
+        assert ignore() is None
+
+    with world.test.empty():
+        @injector
+        def get(x: Annotated[Dummy, Get('dummy')]):  # noqa: F821
+            return x
+
+        world.singletons.add('dummy', Dummy())
+        assert get() is world.get('dummy')
+
+    with world.test.empty():
+        @injector
+        def optional_get(
+                x: Optional[Annotated[Dummy, Get('dummy')]] = None):  # noqa: F821, E501
+            return x
+
+        world.singletons.add('dummy', Dummy())
+        assert optional_get() is world.get('dummy')
+
+    with world.test.empty():
+        @injector
+        def from_arg(x: Annotated[Dummy, FromArg(lambda arg: arg.name)]):
+            return x
+
+        world.singletons.add('x', Dummy())
+        assert from_arg() is world.get('x')
+
+    with world.test.empty():
+        @injector
+        def use_arg_name(x: UseArgName[Dummy]):
+            return x
+
+        world.singletons.add('x', Dummy())
+        assert use_arg_name() is world.get('x')
+
+    with world.test.empty():
+        @injector
+        def from_arg_name(x: Annotated[Dummy, FromArgName('service:{arg_name}')]):  # noqa: F722, E501
+            return x
+
+        world.singletons.add('service:x', Dummy())
+        assert from_arg_name() is world.get('service:x')
+
+    with world.test.empty():
+        class Maker:
+            def __rmatmul__(self, other):
+                return 'dummy'
+
+        @injector
+        def get(x: Annotated[Dummy, From(Maker())]):
+            return x
+
+        world.singletons.add('dummy', Dummy())
+        assert get() is world.get('dummy')
+
+
+def test_multiple_antidote_annotations(injector):
+    class Dummy:
+        pass
+
+    class Maker:
+        def __rmatmul__(self, other):
+            return 'dummy'
+
+    annotations = [
+        Get('dummy'),
+        From(Maker()),
+        FromArg(lambda arg: arg.name),
+        FromArgName('service:{arg_name}'),
+    ]
+    for (a, b) in itertools.combinations(annotations, 2):
+        with pytest.raises(TypeError):
+            @injector
+            def custom_annotated(x: Annotated[Dummy, a, b]):
+                return x
 
 
 @pytest.mark.parametrize(

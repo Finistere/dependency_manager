@@ -56,9 +56,50 @@ It provides the following features:
     - Override locally in a test any dependencies.
 - Performance
     - Antidote has two implementations: the pure Python one which is the reference and the
-      Cython one which is heavily tuned for fast injection. Injection is roughly 10x times faster
-      than with the pure Python. It allows using injections without impact on most functions.
+      Cython one which is heavily tuned for fast injection. :code:`@inject` is roughly
+      10x times faster than with the pure Python. It allows using injections without impact on most functions.
       See `injection benchmark <https://github.com/Finistere/antidote/blob/master/benchmark.ipynb>`_
+
+
+Alternatives
+============
+
+Disclaimer: I've never actually _used_ the compared libraries, this is based on my understanding of their
+documentation. If I missed something, please let me know ! :)
+
+In short, how does Antidote compare to other libraries ?
+
+- Everything is explicit. Some libraries using an :code:`@inject`-like decorator, such as injector_ and lagom_, will try to instantiate
+  any missing argument based on the type hint. Antidote will only inject dependencies that you have defined
+  as such. This might sound cumbersome, but it doesn't require anything more that inheriting :code:`Service` or being
+  decorated with :code:`@service`. It improves maintainability as it is easy to understand what is going on, you know
+  what was
+with the notable exception of dependency_injector_, all libraries have less features
+
+The most popular dependency injection libraries I know of are:
+
+- dependency_injector_:
+- pinject_: Pinject relies on the arguments name to do the wiring. Antidote relies only on type hints for auto wiring.
+  This make injection more robust and a lot easier to maintain. However, Antidote is flexible enough to implement the
+  former.
+- injector_: To call an injected function you need to explicitly call it through the container, :code:`Injector`, managing the
+  dependencies with :code:`Injector.call_with_injection()`.
+  So you have to either change your code to rely on the Injector explicitly or if you're lucky use another library to
+  add Injector support for your framework if you have any.
+  You're also loosing all type information on the argument for Mypy and yourself when overriding arguments for example.
+  Antidote is less constraining as :code:`@inject` can be applied anywhere without any impact. It only tries to inject
+  missing arguments. Furthermore Antidote does not inject arbitrary classes, it only injects what has been explicitly
+  defined as injectable.
+- python_inject_: Inject has
+
+There also a lot of less known dependency injection libraries in Python. Some of them have
+just a lot less features. Others
+
+.. _dependency_injector: https://python-dependency-injector.ets-labs.org/introduction/di_in_python.html
+.. _pinject: https://github.com/google/pinject
+.. _injector: https://github.com/alecthomas/injector
+.. _python_inject: https://github.com/ivankorobkov/python-inject
+.. _lagom: https://github.com/meadsteve/lagom
 
 
 Installation
@@ -196,6 +237,22 @@ Want more ? Here is an over-engineered example to showcase a lot more features:
 
     f()
 
+You can also use :code:`Annotated`:
+
+.. code-block:: python
+
+    from typing_extensions import Annotated
+    # Or for Python 3.9+
+    # from typing import Annotated
+    from antidote import From
+
+    @inject
+    def g(movie_db: Annotated[MovieDB, From(current_movie_db)] = None):
+        assert movie_db is not None  # for Mypy
+        pass
+
+    g()
+
 That looks all good, but what about testability ?
 
 .. code-block:: python
@@ -246,24 +303,6 @@ have a quick summary of what is actually going on:
 
 
 Hooked ? Check out the documentation ! There are still features not presented here !
-
-
-Alternatives
-============
-
-The most popular libraries I know of are:
-
-- dependency_injector_:
-- pinject_:
-- injector_:
-- python_inject_:
-
-There also a lot of less known dependency injection libraries in Python. Some of them
-
-.. _dependency_injector: https://python-dependency-injector.ets-labs.org/introduction/di_in_python.html
-.. _pinject: https://github.com/google/pinject
-.. _injector: https://github.com/alecthomas/injector
-.. _python_inject: https://github.com/ivankorobkov/python-inject
 
 Cython
 ======

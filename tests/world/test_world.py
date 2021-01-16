@@ -1,6 +1,9 @@
+from typing import Callable
+
 import pytest
 
-from antidote import world
+from antidote import world, Get, From, FromArgName
+from antidote._compatibility.typing import Annotated
 from antidote._providers import ServiceProvider
 from antidote.core import (Dependency)
 from antidote.core.exceptions import DuplicateDependencyError
@@ -58,6 +61,43 @@ def test_get():
     world.singletons.add(A, A())
     assert world.get[int]("x") == 1
     assert world.get[A]() is world.get(A)
+
+
+@pytest.mark.parametrize('getter', [
+    pytest.param(world.get, id='get'),
+    pytest.param(world.get[A], id='get[A]'),
+    pytest.param(lambda x: world.lazy(x).get(), id='lazy'),
+    pytest.param(lambda x: world.lazy[A](x).get(), id='lazy[A]')
+])
+def test_annotation_support(getter: Callable[[object], object]):
+    class Maker:
+        def __rmatmul__(self, other):
+            return 'maker'
+
+    world.singletons.add({
+        A: A(),
+        'a': A(),
+        'maker': A()
+    })
+    assert getter(Annotated[A, object()]) is world.get(A)
+    assert getter(Annotated[A, Get('a')]) is world.get('a')  # noqa: F821
+    assert getter(Annotated[A, From(Maker())]) is world.get('maker')
+
+    with pytest.raises(TypeError):
+        getter(Annotated[A, Get('a'), Get('a')])  # noqa: F821
+
+    with pytest.raises(TypeError):
+        getter(Annotated[A, FromArgName('{arg_name}')])  # noqa: F821
+
+
+@pytest.mark.parametrize('getter', [
+    pytest.param(lambda x, d: world.get(x, default=d), id='get'),
+    pytest.param(lambda x, d: world.get[A](x, default=d), id='get[A]')
+])
+def test_default(getter: Callable[[object, object], object]):
+    world.singletons.add(A, A())
+    assert getter(A, 'default') is world.get(A)
+    assert getter('a', 'default') == 'default'
 
 
 def test_lazy():

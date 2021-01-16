@@ -114,6 +114,18 @@ def test_readme():
 
     f()
 
+    from typing_extensions import Annotated
+    # Or for Python 3.9+
+    # from typing import Annotated
+    from antidote import From
+
+    @inject
+    def g(movie_db: Annotated[MovieDB, From(current_movie_db)] = None):
+        assert movie_db is not None  # for Mypy
+        pass
+
+    g()
+
     conf = Conf('/path')
     f(IMDBMovieDB(imdb_factory(
         # The class attributes will retrieve the actual value when called on a instance.

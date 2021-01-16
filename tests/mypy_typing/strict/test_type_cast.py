@@ -1,10 +1,11 @@
 from typing import cast, overload
 
-from antidote import const, Constants, inject, Service, world
-from antidote._compatibility.typing import Protocol
+from antidote import const, Constants, inject, Service, world, factory, Get, From, \
+    UseArgName
+from antidote._compatibility.typing import Protocol, Annotated
 
 
-def test_run_me() -> None:
+def test_constants_typing() -> None:
     with world.test.new():
         class MyService(Service):
             pass
@@ -25,6 +26,43 @@ def test_run_me() -> None:
                 return []
 
         Conf().A.append(1)
+
+
+def test_annotated_typing() -> None:
+    with world.test.new():
+        class Dummy:
+            def hello(self) -> 'Dummy':
+                return self
+
+        world.singletons.add('dummy', Dummy())
+
+        @factory
+        def build_dummy() -> Dummy:
+            return Dummy()
+
+        @inject
+        def f(dummy: Annotated[Dummy, Get('dummy')] = None) -> Dummy:  # noqa: F821, E501
+            assert dummy is not None
+            return dummy
+
+        assert f().hello() is world.get[Dummy](Annotated[Dummy, Get('dummy')])  # noqa: F821, E501
+        assert world.get[Dummy](Annotated[Dummy, Get('dummy')]) \
+               is world.get[Dummy]('dummy')
+
+        @inject
+        def g(dummy: Annotated[Dummy, From(build_dummy)] = None) -> Dummy:
+            assert dummy is not None
+            return dummy
+
+        assert g().hello() is world.get[Dummy](Dummy @ build_dummy)
+
+        # TODO: Uncomment with Mypy > 0.790
+        # @inject
+        # def h(dummy: UseArgName[Dummy] = None) -> Dummy:
+        #     assert dummy is not None
+        #     return dummy
+        #
+        # assert h().hello() is world.get[Dummy]('dummy')
 
 
 def test_proper_typing_assert_none() -> None:

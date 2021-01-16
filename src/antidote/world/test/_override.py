@@ -1,6 +1,6 @@
-from typing import (Any, Callable, Dict, Hashable, Optional, overload, TypeVar, Union,
-                    get_type_hints)
+from typing import (Any, Callable, Dict, Hashable, Optional, TypeVar, Union, overload)
 
+from ..._compatibility.typing import get_type_hints
 from ..._internal import API, state
 from ...core.container import (DependencyValue, Scope)
 from ...utils import validated_scope

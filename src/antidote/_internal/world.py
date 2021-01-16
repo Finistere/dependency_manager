@@ -33,8 +33,9 @@ class WorldGet(metaclass=FinalMeta):
 
     def __getitem__(self,
                     tpe: Type[T]
-                    ) -> 'Callable[[DefaultArg(object), DefaultNamedArg(T, name="default")], T]':
-        def f(__dependency: Hashable = None, *,
+                    ) -> 'Callable[[DefaultArg(object), DefaultNamedArg(T, name="default")], T]':  # noqa F821,E501
+        def f(__dependency: Hashable = None,
+              *,
               default: Union[T, Default] = Default.sentinel) -> T:
             if __dependency is None:
                 __dependency = tpe  # type: ignore

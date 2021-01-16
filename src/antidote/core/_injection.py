@@ -1,7 +1,7 @@
 import collections.abc as c_abc
 import inspect
 from typing import (Any, Callable, cast, Dict, Hashable, Iterable, Mapping, overload,
-                    Set, TYPE_CHECKING, TypeVar, Union)
+                    Set, TYPE_CHECKING, TypeVar, Union, List)
 
 from .exceptions import DoubleInjectionError
 from .._internal import API
@@ -120,7 +120,7 @@ def _build_injection_blueprint(arguments: Arguments,
     arg_to_dependency = _build_arg_to_dependency(arguments, dependencies)
     type_hints = _build_type_hints(arguments, use_type_hints)
     dependency_names = _build_dependency_names(arguments, use_names)
-    resolved_dependencies = []
+    resolved_dependencies: List[object] = []
 
     for arg in arguments:
         d = type_hints.get(arg.name,
@@ -149,9 +149,7 @@ def _build_arg_to_dependency(arguments: Arguments,
         arg_to_dependency: Mapping[str, Hashable] = {}
     elif isinstance(dependencies, str):
         if "{arg_name}" not in dependencies:
-            raise ValueError("Missing formatting parameter {arg_name} in dependencies. "
-                             "If you really want a constant injection, "
-                             "consider using a defaultdict.")
+            raise ValueError("Missing formatting parameter {arg_name} in dependencies.")
         arg_to_dependency = {arg.name: dependencies.format(arg_name=arg.name)
                              for arg in arguments.without_self}
     elif callable(dependencies):

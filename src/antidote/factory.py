@@ -1,13 +1,12 @@
 import inspect
-from typing import (Callable, cast, get_type_hints, Iterable, Optional,
-                    overload, Tuple, TypeVar, Union)
+from typing import (Callable, Iterable, Optional, Tuple, TypeVar, Union, cast, overload)
 
-from ._compatibility.typing import final, Protocol
+from ._compatibility.typing import Protocol, final, get_type_hints
 from ._factory import FactoryMeta, FactoryWrapper, PreBuild
 from ._internal import API
 from ._internal.utils import Copy, FinalImmutable
 from ._providers import FactoryProvider, Tag, TagProvider
-from .core import DEPENDENCIES_TYPE, inject, Wiring, WithWiringMixin, Scope
+from .core import DEPENDENCIES_TYPE, Scope, Wiring, WithWiringMixin, inject
 from .utils import validate_injection, validated_scope, validated_tags
 
 F = TypeVar('F', bound=Callable[..., object])

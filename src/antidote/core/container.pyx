@@ -201,10 +201,10 @@ cdef class RawProvider:
             yield
 
     @contextmanager
-    def _bound_container_locked(self):
+    def _bound_container_locked(self, *, freezing: bool = False):
         container = self._bound_container()
         if container is not None:
-            with container.locked():
+            with container.locked(freezing=freezing):
                 yield
         else:
             yield
@@ -265,7 +265,7 @@ cdef class RawContainer(Container):
     def __init__(self):
         self._dependency_stack = DependencyStack()
         self._instantiation_lock = create_fastrlock()
-        self._freeze_lock = threading.RLock()
+        self._registration_lock = threading.RLock()
         self.__frozen = False
         self.__providers = list()  # type: List[RawProvider]
         self.__singletons = dict()  # type: dict
@@ -297,19 +297,22 @@ cdef class RawContainer(Container):
         return self.__providers.copy()
 
     @contextmanager
-    def locked(self):
-        with self._freeze_lock, self._instantiation_lock:
+    def locked(self, *, freezing: bool = False):
+        assert isinstance(freezing, bool)
+        with self._registration_lock, self._instantiation_lock:
+            if freezing and self.__frozen:
+                raise FrozenWorldError()
             yield
 
     @contextmanager
     def ensure_not_frozen(self):
-        with self._freeze_lock:
+        with self._registration_lock:
             if self.__frozen:
                 raise FrozenWorldError()
             yield
 
     def freeze(self):
-        with self._freeze_lock:
+        with self._registration_lock:
             if self.__frozen:
                 raise FrozenWorldError("Container is already frozen !")
             self.__frozen = True
@@ -317,7 +320,7 @@ cdef class RawContainer(Container):
     def add_provider(self, provider_cls: Type[RawProvider]):
         cdef:
             RawProvider provider
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             assert all(provider_cls != type(p) for p in self.__providers)
             provider = provider_cls()
             provider._container_ref = ref(self)
@@ -328,7 +331,7 @@ cdef class RawContainer(Container):
             self.__singletons_clock += 1
 
     def add_singletons(self, dependencies: Mapping):
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             for k, v in dependencies.items():
                 self.raise_if_exists(k)
             for k, v in dependencies.items():
@@ -341,7 +344,7 @@ cdef class RawContainer(Container):
     def create_scope(self, str name):
         cdef:
             Scope s = Scope(name)
-        with self.ensure_not_frozen(), self._instantiation_lock:
+        with self.locked(freezing=True):
             s.id = <ScopeId> (1 + len(self.__scopes))
             assert s.id <= 0xFF
             assert all(s.name != name for s in self.__scopes)
@@ -357,7 +360,7 @@ cdef class RawContainer(Container):
         return <Scope> self.__scopes[scope_id - 1]
 
     def raise_if_exists(self, dependency: Hashable):
-        with self._freeze_lock:
+        with self._registration_lock:
             if dependency in self.__singletons:
                 raise DuplicateDependencyError(
                     f"{dependency!r} has already been defined as a singleton pointing "
@@ -409,7 +412,7 @@ cdef class RawContainer(Container):
         from .._internal.utils.debug import debug_repr
         from .utils import DependencyDebug
 
-        with self._freeze_lock:
+        with self._registration_lock:
             for p in self.__providers:
                 debug = p.maybe_debug(dependency)
                 if debug is not None:

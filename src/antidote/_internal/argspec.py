@@ -1,8 +1,9 @@
 import inspect
-from typing import Callable, get_type_hints, Iterator, List, Sequence, Set, Union, Any, \
-    Dict
+from typing import (Callable, Iterator, List, Sequence, Set, Union, Any,
+                    Dict)
 
-from antidote._internal.utils import FinalImmutable
+from .utils import FinalImmutable
+from .._compatibility.typing import get_type_hints
 
 
 class Argument(FinalImmutable):
@@ -12,8 +13,8 @@ class Argument(FinalImmutable):
     type_hint: Any
     type_hint_with_extras: Any
 
-    def __repr__(self):
-        return f"Argument({self})"
+    def __repr__(self) -> str:
+        return f"Argument({self}, extras={self.type_hint_with_extras})"
 
     def __str__(self) -> str:
         type_hint = getattr(self.type_hint, "__name__", repr(self.type_hint))

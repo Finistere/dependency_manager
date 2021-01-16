@@ -65,7 +65,7 @@ cdef class RawContainer(Container):
 
         DependencyStack _dependency_stack
         object _instantiation_lock
-        object _freeze_lock
+        object _registration_lock
 
         bint __frozen
         dict __singletons

@@ -4,13 +4,44 @@ requires = [
     "wheel",
     "setuptools_scm>=3.4",
     # Ideally those would be optional...
-    "cython>=0.29",
+    "cython>=0.29,<0.30",
     "fastrlock>=0.5,<0.6"
 ]
 build-backend = "setuptools.build_meta"
 
+
+############
+# Manifest #
+############
 [tool.check-manifest]
 ignore = ["src/antidote/_internal/scm_version.py"]
 
+
+##########
+# Pytest #
+##########
 [tool.pytest.ini_options]
 markers = ["compiled_only"]
+
+
+############
+# Coverage #
+############
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.html]
+directory = "cov_html"
+
+[tool.coverage.paths]
+source = [
+    "src/",
+    ".tox/py*/lib/python*/site-packages/",
+    ".tox/pypy*/site-packages"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:"
+]
