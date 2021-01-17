@@ -1,12 +1,12 @@
-from typing import Optional, Union, Callable, TypeVar
+from typing import Callable, Optional, TypeVar, Union
 
 import pytest
 
+from antidote import From, FromArg, FromArgName, Get, UseArgName
 from antidote._compatibility.typing import Annotated
 from antidote._internal.argspec import Arguments
-from antidote.annotations import UseArgName, FromArg, FromArgName, Get
-from antidote.core.annotations import extract_argument_dependency, AntidoteAnnotation, \
-    extract_annotated_dependency, From
+from antidote.core._annotations import (AntidoteAnnotation, extract_annotated_dependency,
+                                        extract_argument_dependency)
 
 T = TypeVar('T')
 
@@ -39,7 +39,8 @@ def test_simple():
         pass
 
     arguments = Arguments.from_callable(g)
-    assert extract_argument_dependency(arguments[0]) == 'x'
+    assert extract_argument_dependency(arguments[0],
+                                       use_type_hint=False) == 'x'
 
 
 @pytest.mark.parametrize('type_hint,expected', [
@@ -66,13 +67,13 @@ def test_extract_argument_dependency(type_hint, expected):
         pass
 
     arguments = Arguments.from_callable(f)
-    assert extract_argument_dependency(arguments[0]) == expected
+    assert extract_argument_dependency(arguments[0], use_type_hint=True) == expected
 
     def g(x: type_hint = None):
         pass
 
     arguments = Arguments.from_callable(g)
-    assert extract_argument_dependency(arguments[0]) == expected
+    assert extract_argument_dependency(arguments[0], use_type_hint=True) == expected
 
 
 @pytest.mark.parametrize('type_hint,expected', [

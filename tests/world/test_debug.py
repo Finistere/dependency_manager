@@ -1,8 +1,8 @@
 import textwrap
 
-from antidote import (const, Constants, factory, implementation, inject,
-                      LazyCall, LazyMethodCall, Service, Tag, world, Tagged)
-from antidote._internal.utils import raw_getattr, short_id
+from antidote import (Constants, LazyCall, LazyMethodCall, Service, Tag, Tagged, const,
+                      factory, implementation, inject, world)
+from antidote._internal.utils import short_id
 
 
 class DebugTestCase:
@@ -281,7 +281,7 @@ def test_lazy_method_debug():
             DebugTestCase(
                 value=Conf.DATA,
                 expected=f"""
-                    Lazy Method: fetch()  #{short_id(raw_getattr(Conf, 'DATA'))}
+                    Lazy Method: fetch()  #{short_id(Conf.__dict__['DATA'])}
                     ├── {prefix}.Conf.fetch
                     │   └── {prefix}.MyService
                     └── {prefix}.Conf
@@ -290,7 +290,7 @@ def test_lazy_method_debug():
             DebugTestCase(
                 value=Conf.KW,
                 expected=f"""
-        Lazy Method: fetch(*(), **{{'value': '1'}})  #{short_id(raw_getattr(Conf, 'KW'))}
+        Lazy Method: fetch(*(), **{{'value': '1'}})  #{short_id(Conf.__dict__['KW'])}
         ├── {prefix}.Conf.fetch
         │   └── {prefix}.MyService
         └── {prefix}.Conf

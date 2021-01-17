@@ -61,7 +61,7 @@ class Constants(metaclass=ConstantsMeta, abstract=True):
         def __init__(self,
                      *,
                      auto_cast: Union[Iterable[type], bool] = True,
-                     wiring: Optional[Wiring] = Wiring(attempt_methods=['__init__'])):
+                     wiring: Optional[Wiring] = Wiring()):
             """
             Args:
                 wiring: :py:class:`Wiring` used on the class. Defaults to wire only

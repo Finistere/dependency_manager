@@ -7,7 +7,7 @@ from . import API
 from .utils import Default
 from .utils.meta import FinalMeta
 from .._compatibility.typing import final
-from ..core.annotations import extract_annotated_dependency
+from ..core._annotations import extract_annotated_dependency
 from ..core.container import RawContainer
 from ..core.exceptions import DependencyNotFoundError
 from ..core.utils import Dependency

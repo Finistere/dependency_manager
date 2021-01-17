@@ -6,8 +6,8 @@ from ._factory import FactoryMeta, FactoryWrapper, PreBuild
 from ._internal import API
 from ._internal.utils import Copy, FinalImmutable
 from ._providers import FactoryProvider, Tag, TagProvider
-from .core import DEPENDENCIES_TYPE, Scope, Wiring, WithWiringMixin, inject
-from .utils import validate_injection, validated_scope, validated_tags
+from .core import Scope, Wiring, WithWiringMixin, inject
+from .utils import validated_scope, validated_tags
 
 F = TypeVar('F', bound=Callable[..., object])
 
@@ -124,9 +124,7 @@ class Factory(metaclass=FactoryMeta, abstract=True):
 
         def __init__(self,
                      *,
-                     wiring: Optional[Wiring] = Wiring(
-                         methods=['__call__'],
-                         attempt_methods=['__init__']),
+                     wiring: Optional[Wiring] = Wiring(),
                      singleton: bool = None,
                      scope: Optional[Scope] = Scope.sentinel(),
                      tags: Iterable[Tag] = None):
@@ -189,24 +187,16 @@ class Factory(metaclass=FactoryMeta, abstract=True):
 @overload
 def factory(f: F,  # noqa: E704  # pragma: no cover
             *,
-            auto_wire: bool = True,
             singleton: bool = None,
             scope: Optional[Scope] = Scope.sentinel(),
-            dependencies: DEPENDENCIES_TYPE = None,
-            use_names: Union[bool, Iterable[str]] = None,
-            use_type_hints: Union[bool, Iterable[str]] = None,
             tags: Iterable[Tag] = None
             ) -> FactoryProtocol[F]: ...
 
 
 @overload
 def factory(*,  # noqa: E704  # pragma: no cover
-            auto_wire: bool = True,
             singleton: bool = None,
             scope: Optional[Scope] = Scope.sentinel(),
-            dependencies: DEPENDENCIES_TYPE = None,
-            use_names: Union[bool, Iterable[str]] = None,
-            use_type_hints: Union[bool, Iterable[str]] = None,
             tags: Iterable[Tag] = None
             ) -> Callable[[F], FactoryProtocol[F]]: ...
 
@@ -214,12 +204,8 @@ def factory(*,  # noqa: E704  # pragma: no cover
 @API.public
 def factory(f: F = None,
             *,
-            auto_wire: bool = True,
             singleton: bool = None,
             scope: Optional[Scope] = Scope.sentinel(),
-            dependencies: DEPENDENCIES_TYPE = None,
-            use_names: Union[bool, Iterable[str]] = None,
-            use_type_hints: Union[bool, Iterable[str]] = None,
             tags: Iterable[Tag] = None
             ) -> Union[FactoryProtocol[F], Callable[[F], FactoryProtocol[F]]]:
     """
@@ -289,11 +275,6 @@ def factory(f: F = None,
             :code:`singleton`. The scope defines if and how long the returned dependency
             will be cached. See :py:class:`~.core.container.Scope`. Defaults to
             :py:meth:`~.core.container.Scope.singleton`.
-        auto_wire: Whether the function should have its arguments injected or not
-            with :py:func:`~.injection.inject`. Defaults to :py:obj:`True`.
-        dependencies: Propagated to :py:func:`~.injection.inject`.
-        use_names: Propagated to :py:func:`~.injection.inject`.
-        use_type_hints: Propagated to :py:func:`~.injection.inject`.
         tags: Iterable of :py:class:`~.._providers.tag.Tag` applied to the provided
             dependency.
 
@@ -303,9 +284,6 @@ def factory(f: F = None,
     """
     scope = validated_scope(scope, singleton, default=Scope.singleton())
     tags = validated_tags(tags)
-    validate_injection(dependencies, use_names, use_type_hints)
-    if not (auto_wire is None or isinstance(auto_wire, bool)):
-        raise TypeError(f"auto_wire can be None or a boolean, not {type(auto_wire)}")
 
     @inject
     def register_factory(func: F,
@@ -326,12 +304,6 @@ def factory(f: F = None,
 
         if tags is not None and tag_provider is None:
             raise RuntimeError("No TagProvider registered, cannot use tags.")
-
-        if auto_wire:
-            func = inject(func,
-                          dependencies=dependencies,
-                          use_names=use_names,
-                          use_type_hints=use_type_hints)
 
         dependency = factory_provider.register(factory=func,
                                                scope=scope,

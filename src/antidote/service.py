@@ -81,7 +81,7 @@ class Service(metaclass=ServiceMeta, abstract=True):
 
         def __init__(self,
                      *,
-                     wiring: Optional[Wiring] = Wiring(attempt_methods=['__init__']),
+                     wiring: Optional[Wiring] = Wiring(),
                      singleton: bool = None,
                      scope: Optional[Scope] = Scope.sentinel(),
                      tags: Optional[Iterable[Tag]] = None):

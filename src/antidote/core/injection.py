@@ -1,6 +1,6 @@
 import collections.abc as c_abc
-from typing import (Any, Callable, Hashable, Iterable, Mapping,
-                    Optional, overload, Sequence, TypeVar, Union)
+from typing import (Any, Callable, Hashable, Iterable, Mapping, Optional, Sequence,
+                    TypeVar, Union, overload)
 
 from .._compatibility.typing import final
 from .._internal import API
@@ -90,7 +90,7 @@ def inject(func: AnyF = None,
 
     .. doctest:: core_inject
 
-        >>> from antidote import inject
+        >>> from antidote import inject, Service
         >>> # All possibilities for dependency argument.
         ... @inject(dependencies=None)  # default
         ... def f(a):
@@ -118,16 +118,16 @@ def inject(func: AnyF = None,
         ... def f(a, b):
         ...     pass  # a, b = <not injected>, world.get('b')
         >>> # All possibilities for use_type_hints argument.
-        ... class Service:
+        ... class MyService(Service):
         ...     pass
-        >>> @inject(use_type_hints=True)  # default
-        ... def f(a: Service):
-        ...     pass  # a = world.get(Service)
+        >>> @inject(use_type_hints=True)
+        ... def f(a: MyService):
+        ...     pass  # a = world.get(MyService)
         >>> @inject(use_type_hints=['b'])
-        ... def f(a: Service, b: Service):
-        ...     pass  # a, b = <not injected>, world.get(Service)
-        >>> @inject(use_type_hints=False)
-        ... def f(a: Service):
+        ... def f(a: MyService, b: MyService):
+        ...     pass  # a, b = <not injected>, world.get(MyService)
+        >>> @inject(use_type_hints=False)  # default
+        ... def f(a: MyService):
         ...     pass  # a = <not injected>
 
     Args:
@@ -150,7 +150,7 @@ def inject(func: AnyF = None,
             dependency. An iterable of argument names may also be supplied to activate
             this feature only for those. Any type hints from the builtins (str, int...)
             or the typing (except :py:class:`~typing.Optional`) are ignored. It overrides
-            :code:`use_names`. Defaults to :code:`True`.
+            :code:`use_names`. Defaults to :code:`False`.
 
     Returns:
         The decorator to be applied or the injected function if the
@@ -158,7 +158,8 @@ def inject(func: AnyF = None,
 
     """
     from ._injection import raw_inject
-    if func is None:
+
+    if func is None:  # For Mypy
         return raw_inject(dependencies=dependencies,
                           use_names=use_names,
                           use_type_hints=use_type_hints)

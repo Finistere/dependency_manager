@@ -8,6 +8,7 @@ from antidote import world, Ignore, Get, FromArg, UseArgName, FromArgName, From
 from antidote._compatibility.typing import Annotated
 from antidote._internal.argspec import Arguments
 from antidote.core._injection import raw_inject
+from antidote.core.annotations import Inject
 from antidote.core.injection import inject, validate_injection
 from antidote.exceptions import DependencyNotFoundError, DoubleInjectionError
 
@@ -52,7 +53,7 @@ def injector(request):
 
 def test_simple(injector):
     @injector
-    def f(x: Service):
+    def f(x: Inject[Service]):
         return x
 
     with world.test.empty():

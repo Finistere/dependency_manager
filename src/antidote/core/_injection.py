@@ -1,6 +1,7 @@
 import collections.abc as c_abc
 import inspect
-from typing import (Any, Callable, cast, Dict, Hashable, Iterable, Mapping, overload,
+from typing import (Any, Callable, Optional, cast, Dict, Hashable, Iterable, Mapping,
+                    overload,
                     Set, TYPE_CHECKING, TypeVar, Union, List)
 
 from .exceptions import DoubleInjectionError
@@ -19,50 +20,52 @@ AnyF = Union[Callable[..., Any], staticmethod, classmethod]
 @overload
 def raw_inject(func: staticmethod,  # noqa: E704  # pragma: no cover
                *,
-               arguments: Arguments = None,
-               dependencies: 'DEPENDENCIES_TYPE' = None,
+               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
                use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None
+               use_type_hints: Union[bool, Iterable[str]] = None,
+               arguments: Arguments = None
                ) -> staticmethod: ...
 
 
 @overload
 def raw_inject(func: classmethod,  # noqa: E704  # pragma: no cover
                *,
-               arguments: Arguments = None,
-               dependencies: 'DEPENDENCIES_TYPE' = None,
+               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
                use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None
+               use_type_hints: Union[bool, Iterable[str]] = None,
+               arguments: Arguments = None
                ) -> classmethod: ...
 
 
 @overload
 def raw_inject(func: F,  # noqa: E704  # pragma: no cover
                *,
-               arguments: Arguments = None,
-               dependencies: 'DEPENDENCIES_TYPE' = None,
+               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
                use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None
+               use_type_hints: Union[bool, Iterable[str]] = None,
+               arguments: Arguments = None
                ) -> F: ...
 
 
 @overload
 def raw_inject(*,  # noqa: E704  # pragma: no cover
-               arguments: Arguments = None,
-               dependencies: 'DEPENDENCIES_TYPE' = None,
+               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
                use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None
+               use_type_hints: Union[bool, Iterable[str]] = None,
                ) -> Callable[[F], F]: ...
 
 
 @API.private  # Use inject instead
 def raw_inject(func: AnyF = None,
                *,
-               arguments: Arguments = None,
-               dependencies: 'DEPENDENCIES_TYPE' = None,
+               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
                use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None
+               use_type_hints: Union[bool, Iterable[str]] = None,
+               arguments: Arguments = None
                ) -> AnyF:
+    use_names = use_names if use_names is not None else False
+    use_type_hints = use_type_hints if use_type_hints is not None else False
+
     def _inject(f: AnyF) -> AnyF:
         if inspect.isclass(f):
             # @inject on a class would not return a class which is
@@ -102,9 +105,9 @@ def raw_inject(func: AnyF = None,
 
 @API.private
 def _build_injection_blueprint(arguments: Arguments,
-                               dependencies: 'DEPENDENCIES_TYPE' = None,
-                               use_names: Union[bool, Iterable[str]] = None,
-                               use_type_hints: Union[bool, Iterable[str]] = None,
+                               dependencies: 'Optional[DEPENDENCIES_TYPE]',
+                               use_names: Union[bool, Iterable[str]],
+                               use_type_hints: Union[bool, Iterable[str]],
                                ) -> InjectionBlueprint:
     """
     Construct a InjectionBlueprint with all the necessary information about
@@ -114,8 +117,6 @@ def _build_injection_blueprint(arguments: Arguments,
     Used by inject()
     """
     from .annotations import IGNORE_SENTINEL
-    use_names = use_names if use_names is not None else False
-    use_type_hints = use_type_hints if use_type_hints is not None else True
 
     arg_to_dependency = _build_arg_to_dependency(arguments, dependencies)
     type_hints = _build_type_hints(arguments, use_type_hints)
@@ -142,7 +143,7 @@ def _build_injection_blueprint(arguments: Arguments,
 
 @API.private
 def _build_arg_to_dependency(arguments: Arguments,
-                             dependencies: 'DEPENDENCIES_TYPE' = None
+                             dependencies: 'Optional[DEPENDENCIES_TYPE]'
                              ) -> Dict[str, Hashable]:
     from .injection import Arg
     if dependencies is None:
@@ -180,28 +181,26 @@ def _build_arg_to_dependency(arguments: Arguments,
 @API.private
 def _build_type_hints(arguments: Arguments,
                       use_type_hints: Union[bool, Iterable[str]]) -> Dict[str, Hashable]:
-    from .annotations import extract_argument_dependency
+    from ._annotations import extract_argument_dependency
 
     if use_type_hints is True:
-        type_hints = {arg.name: arg.type_hint for arg in arguments.without_self}
+        use_type_hints = {arg.name for arg in arguments.without_self}
     elif use_type_hints is False:
-        return {}
+        use_type_hints = set()
     elif isinstance(use_type_hints, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
-        use_type_hints = tuple(use_type_hints)
+        use_type_hints = set(use_type_hints)
         _check_valid_arg_names(use_type_hints, arguments)
-
-        type_hints = {name: arguments[name].type_hint for name in use_type_hints}
-
     else:
         raise TypeError(f"Only an iterable or a boolean is supported for "
                         f"use_type_hints, not {type(use_type_hints)!r}")
 
     arg_to_dependency = {}
-    for arg_name in list(type_hints.keys()):
-        dependency = extract_argument_dependency(arguments[arg_name])
+    for arg in arguments.without_self:
+        dependency = extract_argument_dependency(arg,
+                                                 use_type_hint=arg.name in use_type_hints)
         if dependency is not None:
-            arg_to_dependency[arg_name] = dependency
+            arg_to_dependency[arg.name] = dependency
 
     return arg_to_dependency
 

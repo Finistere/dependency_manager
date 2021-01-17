@@ -98,7 +98,7 @@ def test_readme():
 
     class IMDBMovieDB(MovieDB, Service):
         # New instance each time
-        __antidote__ = Service.Conf(singleton=False)
+        __antidote__ = Service.Conf(singleton=False).with_wiring(use_type_hints=True)
 
         @inject(dependencies={'imdb_api': ImdbAPI @ imdb_factory})
         def __init__(self, imdb_api: ImdbAPI):

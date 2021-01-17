@@ -100,50 +100,6 @@ def test_wiring_methods():
                 return x
 
 
-def test_wiring_super_methods():
-    class A:
-        def f(self, x: Dummy):
-            return x
-
-    with pytest.raises(AttributeError, match=".*'f'.*"):
-        wiring = Wiring(methods=['f'])
-
-        @wiring.wire
-        class X(A):
-            pass
-
-    with pytest.raises(AttributeError, match=".*'f'.*"):
-        wiring = Wiring(methods=['f'], wire_super=False)
-
-        @wiring.wire
-        class Y(A):
-            pass
-
-    b_wiring = Wiring(methods=['f'], wire_super=True)
-
-    @b_wiring.wire
-    class B(A):
-        pass
-
-    assert B().f() is world.get(Dummy)
-
-    c_wiring = Wiring(methods=['f'], wire_super=['f'])
-
-    @c_wiring.wire
-    class C(A):
-        pass
-
-    assert C().f() is world.get(Dummy)
-
-    d_wiring = Wiring(attempt_methods=['f'], wire_super=['f'])
-
-    @d_wiring.wire
-    class D(A):
-        pass
-
-    assert D().f() is world.get(Dummy)
-
-
 def test_wiring_dependencies():
     a_wiring = Wiring(methods=['f'], dependencies=('y',))
 

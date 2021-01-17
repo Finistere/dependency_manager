@@ -1,7 +1,7 @@
 from . import world
-from .annotations import Ignore, Get, From, FromArg, FromArgName, UseArgName
+from .core.annotations import Ignore, Get, From, FromArg, FromArgName, UseArgName, Inject
 from .constants import const, Constants
-from .core import inject, wire, Wiring, Scope
+from .core import inject, wire, Wiring, Scope, auto_wire
 from .factory import factory, Factory
 from .implementation import implementation
 from .lazy import LazyCall, LazyMethodCall
@@ -19,6 +19,6 @@ def __version__() -> str:  # pragma: no cover
 
 
 __all__ = ['world', 'Ignore', 'Get', 'From', 'FromArg', 'FromArgName', 'UseArgName',
-           'const', 'Constants', 'inject', 'wire', 'Wiring', 'factory',
+           'const', 'Constants', 'inject', 'auto_wire', 'wire', 'Wiring', 'factory',
            'Factory', 'implementation', 'LazyCall', 'LazyMethodCall',
            'service', 'Service', 'Tag', 'Tagged', 'is_compiled']
