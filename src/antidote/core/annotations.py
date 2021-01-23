@@ -167,56 +167,31 @@ class FromArgName(FinalImmutable, AntidoteAnnotation):
 
 # API.private
 INJECT_SENTINEL = AntidoteAnnotation()
-IGNORE_SENTINEL = AntidoteAnnotation()
 
 # API.public
-Inject = Annotated[T, INJECT_SENTINEL]
-Inject.__doc__ = """
-No injection will be done.
+Provide = Annotated[T, INJECT_SENTINEL]
+Provide.__doc__ = """
+Type hint will be used as the dependency.
 
 .. doctest:: core_annotation_ignore
 
-    >>> from typing import Annotated
-    >>> from antidote import Service, world, inject, Ignore
+    >>> from antidote import Service, world, inject, Provide, Get
+    >>> from typing_extensions import Annotated
     >>> class Database(Service):
     ...     pass
     >>> @inject
-    ... def load_db(db: Database = None):
+    ... def load_db(db: Provide[Database] = None):
     ...     return db
     >>> load_db()
     <Database ...>
-    >>> @inject
-    ... def no_db(db: Ignore[Database] = None):
+    >>> # Equivalent to
+    ... @inject
+    ... def load_db(db: Annotated[Database, Get(Database)] = None):
     ...     return db
-    >>> no_db()
-    None
 """
 
 # API.public
-Ignore = Annotated[T, IGNORE_SENTINEL]
-Ignore.__doc__ = """
-No injection will be done.
-
-.. doctest:: core_annotation_ignore
-
-    >>> from typing import Annotated
-    >>> from antidote import Service, world, inject, Ignore
-    >>> class Database(Service):
-    ...     pass
-    >>> @inject
-    ... def load_db(db: Database = None):
-    ...     return db
-    >>> load_db()
-    <Database ...>
-    >>> @inject
-    ... def no_db(db: Ignore[Database] = None):
-    ...     return db
-    >>> no_db()
-    None
-"""
-
-# API.public
-UseArgName = Annotated[T, FromArgName("{arg_name}")]  # type: ignore
+UseArgName = Annotated[T, FromArgName("{arg_name}")]
 UseArgName.__doc__ = """
 The name of the argument will be used as the dependency.
 """

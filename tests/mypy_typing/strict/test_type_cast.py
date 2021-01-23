@@ -1,7 +1,8 @@
 from typing import cast, overload
 
-from antidote import const, Constants, inject, Service, world, factory, Get, From, \
-    UseArgName
+from antidote import (Provide, const, Constants, inject, Service, world, factory, Get,
+                      From,
+                      UseArgName)
 from antidote._compatibility.typing import Protocol, Annotated
 
 
@@ -21,7 +22,7 @@ def test_constants_typing() -> None:
             B = const[list]("b", default=[2])
 
             @inject
-            def get(self, key: str, my_service: MyService = None) -> object:
+            def get(self, key: str, my_service: Provide[MyService] = None) -> object:
                 assert my_service is not None
                 return []
 
@@ -56,13 +57,12 @@ def test_annotated_typing() -> None:
 
         assert g().hello() is world.get[Dummy](Dummy @ build_dummy)
 
-        # TODO: Uncomment with Mypy > 0.790
-        # @inject
-        # def h(dummy: UseArgName[Dummy] = None) -> Dummy:
-        #     assert dummy is not None
-        #     return dummy
-        #
-        # assert h().hello() is world.get[Dummy]('dummy')
+        @inject
+        def h(dummy: UseArgName[Dummy] = None) -> Dummy:
+            assert dummy is not None
+            return dummy
+
+        assert h().hello() is world.get[Dummy]('dummy')
 
 
 def test_proper_typing_assert_none() -> None:
@@ -71,7 +71,7 @@ def test_proper_typing_assert_none() -> None:
             pass
 
         @inject
-        def f(my_service: MyService = None) -> MyService:
+        def f(my_service: Provide[MyService] = None) -> MyService:
             # We never expect it to be None, but it Mypy will now
             # understand that my_service may not be provided.
             assert my_service is not None
@@ -89,7 +89,7 @@ def test_proper_typing_assert_none() -> None:
         def g() -> MyService: ...  # noqa: E704
 
         @inject
-        def g(my_service: MyService = None) -> MyService:
+        def g(my_service: Provide[MyService] = None) -> MyService:
             assert my_service is not None
             return my_service
 
@@ -102,7 +102,7 @@ def test_proper_typing_protocol() -> None:
             pass
 
         @inject
-        def f(my_service: MyService) -> MyService:
+        def f(my_service: Provide[MyService]) -> MyService:
             return my_service
 
         class FProtocol(Protocol):

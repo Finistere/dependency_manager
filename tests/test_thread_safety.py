@@ -58,8 +58,8 @@ def delayed_new_class(cls):
 
 def test_container_instantiation_safety():
     with world.test.new():
-        build_a = factory(delayed_new_class(A), singleton=True, auto_wire=False)
-        build_b = factory(delayed_new_class(B), singleton=False, auto_wire=False)
+        build_a = factory(delayed_new_class(A), singleton=True)
+        build_b = factory(delayed_new_class(B), singleton=False)
 
         singleton_got = []
         non_singleton_got = []

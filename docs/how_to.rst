@@ -15,13 +15,13 @@ define arguments as optional as shown below:
 
 .. testcode:: how_to_mypy
 
-    from antidote import inject, Service
+    from antidote import inject, Service, Provide
 
     class MyService(Service):
         pass
 
     @inject
-    def f(my_service: MyService = None) -> MyService:
+    def f(my_service: Provide[MyService] = None) -> MyService:
         # We never expect it to be None, but it Mypy will now
         # understand that my_service may not be provided.
         assert my_service is not None
@@ -40,7 +40,7 @@ define arguments as optional as shown below:
     def g() -> MyService: ...
 
     @inject
-    def g(my_service: MyService = None) -> MyService:
+    def g(my_service: Provide[MyService] = None) -> MyService:
         assert my_service is not None
         return my_service
 

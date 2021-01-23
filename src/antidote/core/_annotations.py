@@ -1,9 +1,9 @@
 import builtins
 import inspect
-from typing import Union
+from typing import Hashable, Set, Union
 
 from .annotations import (AntidoteAnnotation, From, FromArg, FromArgName, Get,
-                          IGNORE_SENTINEL, INJECT_SENTINEL)
+                          INJECT_SENTINEL)
 from .injection import Arg
 from .._compatibility.typing import Annotated, get_args, get_origin
 from .._internal import API
@@ -44,7 +44,7 @@ _BUILTINS_TYPES = {e for e in builtins.__dict__.values() if isinstance(e, type)}
 
 
 @API.private
-def extract_argument_dependency(argument: Argument, *, use_type_hint: bool) -> object:
+def extract_annotated_arg_dependency(argument: Argument) -> object:
     type_hint = argument.type_hint_with_extras
     origin = get_origin(type_hint)
     args = get_args(type_hint)
@@ -56,8 +56,6 @@ def extract_argument_dependency(argument: Argument, *, use_type_hint: bool) -> o
                 type_hint = args[0] if isinstance(None, args[1]) else args[0]
                 origin = get_origin(type_hint)
                 args = get_args(type_hint)
-
-    dependency = type_hint
 
     # Dependency explicitly given through Annotated (PEP-593)
     if origin is Annotated:
@@ -84,17 +82,38 @@ def extract_argument_dependency(argument: Argument, *, use_type_hint: bool) -> o
                 return annotation.function(arg)  # type: ignore
             elif isinstance(annotation, FromArgName):
                 return annotation.template.format(arg_name=argument.name)
-            elif annotation is IGNORE_SENTINEL:
-                return IGNORE_SENTINEL
             else:
                 raise TypeError(f"Unsupported AntidoteAnnotation, {type(annotation)}")
-        else:
+
+    return None
+
+
+@API.private
+def extract_auto_provided_arg_dependency(argument: Argument) -> object:
+    type_hint = argument.type_hint_with_extras
+    origin = get_origin(type_hint)
+    args = get_args(type_hint)
+
+    # Optional
+    if origin is Union:
+        if len(args) == 2:
+            if isinstance(None, args[1]) or isinstance(None, args[0]):
+                type_hint = args[0] if isinstance(None, args[1]) else args[0]
+                origin = get_origin(type_hint)
+                args = get_args(type_hint)
+
+    dependency = type_hint
+
+    if origin is Annotated:
+        antidote_annotations = [a
+                                for a in type_hint.__metadata__
+                                if isinstance(a, AntidoteAnnotation)]
+        if not antidote_annotations:
             dependency = args[0]
 
-    if use_type_hint:
-        if (getattr(dependency, '__module__', '') != 'typing'
-                and dependency not in _BUILTINS_TYPES
-                and (isinstance(dependency, type) and inspect.isclass(dependency))):
-            return dependency
+    if (getattr(dependency, '__module__', '') != 'typing'
+            and dependency not in _BUILTINS_TYPES
+            and (isinstance(dependency, type) and inspect.isclass(dependency))):
+        return dependency
 
     return None

@@ -1,11 +1,11 @@
 from . import world
-from .core.annotations import Ignore, Get, From, FromArg, FromArgName, UseArgName, Inject
-from .constants import const, Constants
-from .core import inject, wire, Wiring, Scope, auto_wire
-from .factory import factory, Factory
+from .constants import Constants, const
+from .core import (From, FromArg, FromArgName, Get, Provide, Scope, UseArgName, Wiring,
+                   auto_provide, inject, wire)
+from .factory import Factory, factory
 from .implementation import implementation
 from .lazy import LazyCall, LazyMethodCall
-from .service import service, Service
+from .service import Service, service
 from .tag import Tag, Tagged
 from .utils import is_compiled
 
@@ -18,7 +18,7 @@ def __version__() -> str:  # pragma: no cover
         return ''
 
 
-__all__ = ['world', 'Ignore', 'Get', 'From', 'FromArg', 'FromArgName', 'UseArgName',
-           'const', 'Constants', 'inject', 'auto_wire', 'wire', 'Wiring', 'factory',
+__all__ = ['world', 'Get', 'From', 'FromArg', 'FromArgName', 'Provide', 'UseArgName',
+           'const', 'Constants', 'inject', 'auto_provide', 'wire', 'Wiring', 'factory',
            'Factory', 'implementation', 'LazyCall', 'LazyMethodCall',
            'service', 'Service', 'Tag', 'Tagged', 'is_compiled']

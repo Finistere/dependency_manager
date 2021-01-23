@@ -1,12 +1,30 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
-from antidote import inject, world
+from antidote import Provide, inject, world
 from antidote.core.exceptions import DoubleInjectionError
 from antidote.core.wiring import Wiring, WithWiringMixin
+
+if TYPE_CHECKING:
+    pass
 
 
 class Dummy:
     pass
+
+
+@pytest.fixture(params=['Wiring', 'wire'])
+def wire(request):
+    kind = request.param
+    if kind == 'Wiring':
+        def wire(**kwargs):
+            return Wiring(**kwargs).wire
+
+        return wire
+    else:
+        from antidote import wire
+        return wire
 
 
 @pytest.fixture(autouse=True)
@@ -20,63 +38,156 @@ def new_world():
         yield
 
 
-@pytest.mark.parametrize('kwargs, expectation', [
-    (dict(), pytest.raises(TypeError)),
-    (dict(methods=[]), pytest.raises(ValueError, match=".*method.*")),
-    (dict(attempt_methods=[]),
-     pytest.raises(ValueError, match=".*attempt_methods.*")),
-    (dict(methods=[], attempt_methods=[]),
-     pytest.raises(ValueError, match=".*methods.*attempt_methods.*")),
+class Service:
+    pass
 
-    (dict(methods=1), pytest.raises(TypeError, match=".*method.*")),
-    (dict(attempt_methods=1),
-     pytest.raises(TypeError, match=".*attempt_methods.*")),
-    (dict(methods=[1]), pytest.raises(ValueError, match="(?i).*method.*")),
-    (dict(attempt_methods=[1]),
-     pytest.raises(ValueError, match=".*attempt_methods.*")),
 
-    (dict(methods=['f'], dependencies=1),
-     pytest.raises(TypeError, match=".*dependencies.*")),
-    (dict(methods=['f'], use_names=1), pytest.raises(TypeError, match=".*use_names.*")),
-    (dict(methods=['f'], use_type_hints=1),
-     pytest.raises(TypeError, match=".*use_type_hints.*")),
-    (dict(methods=['f'], wire_super=1), pytest.raises(TypeError, match=".*wire_super.*")),
-    (dict(methods=['f'], wire_super=['x']),
-     pytest.raises(ValueError, match=".*wire_super.*")),
-    (dict(attempt_methods=['f'], wire_super=['x']),
-     pytest.raises(ValueError, match=".*wire_super.*"))
+class AnotherService:
+    pass
+
+
+@pytest.mark.parametrize('kwargs', [
+    dict(dependencies=('x', 'y')),
+    dict(dependencies=dict(x='x', y='y')),
+    dict(use_names=['x', 'y']),
 ])
-def test_validation(kwargs, expectation):
+def test_no_strict_validation(wire, kwargs):
+    @wire(**kwargs)
+    class A:
+        def f(self, x):
+            return x
+
+        def g(self, x, y):
+            return x, y
+
+    a = A()
+    assert a.f() == world.get("x")
+    assert a.g() == (world.get("x"), world.get("y"))
+
+
+def test_no_strict_validation_auto_provide(wire):
+    world.singletons.add({Service: Service(), AnotherService: AnotherService()})
+
+    @wire(auto_provide=[Service, AnotherService])
+    class A:
+        def f(self, x: Service):
+            return x
+
+        def g(self, x: Service, y: AnotherService):
+            return x, y
+
+    a = A()
+    assert a.f() == world.get(Service)
+    assert a.g() == (world.get(Service), world.get(AnotherService))
+
+
+def test_subclass_classmethod(wire):
+    @wire(use_names=True)
+    class Dummy:
+        @classmethod
+        def cls_method(cls, x):
+            return cls, x
+
+    assert (Dummy, world.get('x')) == Dummy.cls_method()
+
+    class SubDummy(Dummy):
+        pass
+
+    assert (SubDummy, world.get('x')) == SubDummy.cls_method()
+
+
+@pytest.mark.parametrize('kwargs, expectation', [
+    (dict(methods=object()), pytest.raises(TypeError, match=".*method.*")),
+    (dict(methods=[object()]), pytest.raises(TypeError, match="(?i).*method.*")),
+    (dict(dependencies=object()), pytest.raises(TypeError, match=".*dependencies.*")),
+    (dict(use_names=object()), pytest.raises(TypeError, match=".*use_names.*")),
+    (dict(use_names=[object()]), pytest.raises(TypeError, match=".*use_names.*")),
+    (dict(auto_provide=object()), pytest.raises(TypeError, match=".*auto_provide.*")),
+    (dict(raise_on_double_injection=object()),
+     pytest.raises(TypeError, match=".*raise_on_double_injection.*")),
+])
+def test_validation(wire, kwargs, expectation):
     with expectation:
-        Wiring(**kwargs)
+        wire(**kwargs)
 
 
-def test_init():
-    w = Wiring(methods=iter(['method']), attempt_methods=iter(['attempt']),
-               wire_super=iter(['method']), use_names=iter(['method']),
-               use_type_hints=iter(['method']))
+def test_iterable():
+    w = Wiring(methods=iter(['method']),
+               use_names=iter(['method']),
+               auto_provide=iter(['method']))
 
     assert isinstance(w.methods, frozenset)
     assert w.methods == {'method'}
-    assert isinstance(w.attempt_methods, frozenset)
-    assert w.attempt_methods == {'attempt'}
-    assert isinstance(w.wire_super, frozenset)
-    assert w.wire_super == {'method'}
+    assert isinstance(w.auto_provide, frozenset)
+    assert w.auto_provide == {'method'}
     assert isinstance(w.use_names, frozenset)
     assert w.use_names == {'method'}
-    assert isinstance(w.use_type_hints, frozenset)
-    assert w.use_type_hints == {'method'}
 
 
-def test_wiring_methods():
-    wiring = Wiring(methods=['f'])
-
-    @wiring.wire
+def test_default_all_methods(wire):
+    @wire()
     class A:
-        def f(self, x: Dummy):
+        def __init__(self, x: Provide[Dummy]):
+            self.x = x
+
+        def __call__(self, x: Provide[Dummy]):
             return x
 
-        def g(self, x: Dummy):
+        def method(self, x: Provide[Dummy]):
+            return x
+
+        @classmethod
+        def klass(cls, x: Provide[Dummy]):
+            return x
+
+        @staticmethod
+        def static(x: Provide[Dummy]):
+            return x
+
+        def _method(self, x: Provide[Dummy]):
+            return x
+
+        @classmethod
+        def _klass(cls, x: Provide[Dummy]):
+            return x
+
+        @staticmethod
+        def _static(x: Provide[Dummy]):
+            return x
+
+        def __method(self, x: Provide[Dummy]):
+            return x
+
+        @classmethod
+        def __klass(cls, x: Provide[Dummy]):
+            return x
+
+        @staticmethod
+        def __static(x: Provide[Dummy]):
+            return x
+
+    a = A()
+    dummy = world.get(Dummy)
+    assert a.x is dummy
+    assert a() is dummy
+    assert a.method() is dummy
+    assert a.klass() is dummy
+    assert a.static() is dummy
+    assert a._method() is dummy
+    assert a._klass() is dummy
+    assert a._static() is dummy
+    assert a._A__method() is dummy
+    assert a._A__klass() is dummy
+    assert a._A__static() is dummy
+
+
+def test_methods(wire):
+    @wire(methods=['f'], dependencies={'x': Dummy})
+    class A:
+        def f(self, x):
+            return x
+
+        def g(self, x):
             return x
 
     assert A().f() is world.get(Dummy)
@@ -84,246 +195,182 @@ def test_wiring_methods():
         A().g()
 
     with pytest.raises(AttributeError):
-        wiring = Wiring(methods=['f'])
-
-        @wiring.wire
+        @wire(methods=['f'])
         class A:
             pass
 
-    with pytest.raises(DoubleInjectionError):
-        wiring = Wiring(methods=['f'])
 
-        @wiring.wire
-        class A:
-            @inject
-            def f(self, x: Dummy):
+def test_double_injection(wire):
+    @wire(methods=['f'])
+    class A:
+        @inject(use_names=True)  # use_names to force injection
+        def f(self, x):
+            return x
+
+    assert A().f() is world.get('x')
+
+    with pytest.raises(DoubleInjectionError):
+        @wire(methods=['f'], raise_on_double_injection=True)
+        class B:
+            @inject(use_names=True)  # use_names to force injection
+            def f(self, x):
                 return x
 
-
-def test_wiring_dependencies():
-    a_wiring = Wiring(methods=['f'], dependencies=('y',))
-
-    @a_wiring.wire
-    class A:
-        def f(self, x: Dummy):
-            return x
-
-    assert A().f() is world.get('y')
-
-    b_wiring = Wiring(methods=['f'], dependencies=dict(x='z'))
-
-    @b_wiring.wire
-    class B:
-        def f(self, x: Dummy):
-            return x
-
-    assert B().f() is world.get('z')
-
-    c_wiring = Wiring(methods=['f'], dependencies="{arg_name}")
-
-    @c_wiring.wire
+    @wire()
     class C:
-        def f(self, x: Dummy):
+        @inject(use_names=True)  # use_names to force injection
+        def f(self, x):
             return x
 
     assert C().f() is world.get('x')
 
-    d_wiring = Wiring(methods=['f'], dependencies=lambda arg: arg.name * 2)
-
-    @d_wiring.wire
-    class D:
-        def f(self, x: Dummy):
-            return x
-
-    assert D().f() is world.get('xx')
+    with pytest.raises(DoubleInjectionError):
+        @wire(raise_on_double_injection=True)
+        class D:
+            @inject(use_names=True)  # use_names to force injection
+            def f(self, x):
+                return x
 
 
-def test_wiring_use_names():
-    a_wiring = Wiring(methods=['f'])
+def test_invalid_methods(wire):
+    with pytest.raises(TypeError, match='.*not_a_method.*'):
+        @wire(methods=['not_a_method'],
+              use_names=True)  # use_names to force injection
+        class Dummy:
+            not_a_method = 1
 
-    @a_wiring.wire
+
+@pytest.fixture(params=['method', 'classmethod', 'staticmethod'])
+def wired_method_builder(request):
+    kind = request.param
+
+    def build(wire, *, annotation=object):
+        if kind == 'method':
+            @wire
+            class A:
+                def f(self, x: annotation):
+                    return x
+        elif kind == 'classmethod':
+            @wire
+            class A:
+                @classmethod
+                def f(cls, x: annotation):
+                    return x
+        else:
+            @wire
+            class A:
+                @staticmethod
+                def f(x: annotation):
+                    return x
+        return A().f
+
+    return build
+
+
+def test_use_inject_annotation(wire, wired_method_builder):
+    f = wired_method_builder(wire())
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(), annotation=Provide[Dummy])
+    assert f() is world.get(Dummy)
+
+
+def test_dependencies(wire, wired_method_builder):
+    f = wired_method_builder(wire(methods=['f'], dependencies=('y',)))
+    assert f() is world.get('y')
+
+    f = wired_method_builder(wire(methods=['f'], dependencies=dict(x='z')))
+    assert f() is world.get('z')
+
+    f = wired_method_builder(wire(methods=['f'], dependencies=dict(y='z')))
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(methods=['f'], dependencies="{arg_name}"))
+    assert f() is world.get('x')
+
+    f = wired_method_builder(wire(methods=['f'], dependencies=lambda arg: arg.name * 2))
+    assert f() is world.get('xx')
+
+
+def test_use_names(wire, wired_method_builder):
+    f = wired_method_builder(wire(methods=['f']))
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(methods=['f'], use_names=False))
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(methods=['f'], use_names=True))
+    assert f() is world.get('x')
+
+    f = wired_method_builder(wire(methods=['f'], use_names=['x']))
+    assert f() is world.get('x')
+
+    f = wired_method_builder(wire(methods=['f'], use_names=['y']))
+    with pytest.raises(TypeError):
+        f()
+
+
+@pytest.mark.parametrize('annotation', [object, Dummy])
+def test_wiring_auto_provide(wire, wired_method_builder, annotation):
+    f = wired_method_builder(wire(methods=['f']),
+                             annotation=annotation)
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(methods=['f'], auto_provide=False),
+                             annotation=annotation)
+    with pytest.raises(TypeError):
+        f()
+
+    f = wired_method_builder(wire(methods=['f'], auto_provide=True),
+                             annotation=annotation)
+    if annotation is Dummy:
+        assert f() is world.get(Dummy)
+    else:
+        with pytest.raises(TypeError):
+            f()
+
+    f = wired_method_builder(wire(methods=['f'], auto_provide=[Dummy]),
+                             annotation=annotation)
+    if annotation is Dummy:
+        assert f() is world.get(Dummy)
+    else:
+        with pytest.raises(TypeError):
+            f()
+
+    class Unknown:
+        pass
+
+    f = wired_method_builder(wire(methods=['f'], auto_provide=[Unknown]),
+                             annotation=annotation)
+    with pytest.raises(TypeError):
+        f()
+
+
+def test_complex_wiring(wire):
+    @wire(auto_provide=True,
+          methods=['g'],
+          use_names=['y'])
     class A:
-        def f(self, y):
-            return y
+        def f(self, x: Dummy, y=None):
+            return x, y
+
+        def g(self, x: Dummy, y=None):
+            return x, y
 
     with pytest.raises(TypeError):
         A().f()
 
-    b_wiring = Wiring(methods=['f'], use_names=False)
-
-    @b_wiring.wire
-    class B:
-        def f(self, y):
-            return y
-
-    with pytest.raises(TypeError):
-        B().f()
-
-    c_wiring = Wiring(methods=['f'], use_names=True)
-
-    @c_wiring.wire
-    class C:
-        def f(self, y):
-            return y
-
-    assert C().f() is world.get('y')
-
-    d_wiring = Wiring(methods=['f'], use_names=['y'])
-
-    @d_wiring.wire
-    class D:
-        def f(self, y):
-            return y
-
-    assert D().f() is world.get('y')
+    assert A().g() == (world.get(Dummy), world.get("y"))
 
 
-def test_wiring_use_type_hints():
-    a_wiring = Wiring(methods=['f'])
-
-    @a_wiring.wire
-    class A:
-        def f(self, y: Dummy):
-            return y
-
-    assert A().f() is world.get(Dummy)
-
-    b_wiring = Wiring(methods=['f'], use_type_hints=False)
-
-    @b_wiring.wire
-    class B:
-        def f(self, y: Dummy):
-            return y
-
-    with pytest.raises(TypeError):
-        B().f()
-
-    c_wiring = Wiring(methods=['f'], use_type_hints=True)
-
-    @c_wiring.wire
-    class C:
-        def f(self, y: Dummy):
-            return y
-
-    assert C().f() is world.get(Dummy)
-
-    d_wiring = Wiring(methods=['f'], use_type_hints=['y'])
-
-    @d_wiring.wire
-    class D:
-        def f(self, y: Dummy):
-            return y
-
-    assert D().f() is world.get(Dummy)
-
-
-def test_complex_wiring():
-    wiring = Wiring(methods=['f', 'g'],
-                    use_names=['x'],
-                    wire_super=True)
-
-    class A:
-        def g(self, x, y=None):
-            return x, y
-
-    @wiring.wire
-    class B(A):
-        def f(self, x: Dummy):
-            return x
-
-    assert B().f() is world.get(Dummy)
-    assert B().g() == (world.get('x'), None)
-
-
-def test_wiring_static_class_method():
-    a_wiring = Wiring(methods=['static', 'klass'])
-
-    @a_wiring.wire
-    class A:
-        @staticmethod
-        def static(x: Dummy):
-            return x
-
-        @classmethod
-        def klass(cls, x: Dummy):
-            return cls, x
-
-    assert A.static() is world.get(Dummy)
-    assert A.klass() == (A, world.get(Dummy))
-    assert A().static() is world.get(Dummy)
-    assert A().klass() == (A, world.get(Dummy))
-
-    class B:
-        @staticmethod
-        def static(x: Dummy):
-            return x
-
-        @classmethod
-        def klass(cls, x: Dummy):
-            return cls, x
-
-    c_wiring = Wiring(methods=['static', 'klass'], wire_super=True)
-
-    @c_wiring.wire
-    class C(B):
-        pass
-
-    assert C.static() is world.get(Dummy)
-    assert C.klass() == (C, world.get(Dummy))
-    assert C().static() is world.get(Dummy)
-    assert C().klass() == (C, world.get(Dummy))
-
-
-def test_attempt_methods():
-    with pytest.raises(AttributeError, match=".*unknown_method.*"):
-        wiring = Wiring(methods=['unknown_method'])
-
-        @wiring.wire
-        class X:
-            pass
-
-    a_wiring = Wiring(attempt_methods=['unknown_method'])
-
-    @a_wiring.wire
-    class A:
-        pass
-
-    b_wiring = Wiring(methods=['method'], attempt_methods=['maybe_method'])
-
-    @b_wiring.wire
-    class B:
-        def method(self):
-            pass
-
-    with pytest.raises(AttributeError, match=".*method.*"):
-        @b_wiring.wire
-        class B2:
-            def maybe_method(self):
-                pass
-
-    c_wiring = Wiring(attempt_methods=['method'])
-
-    @c_wiring.wire
-    class C:
-        def method(self, d: Dummy):
-            return d
-
-    assert C().method() is world.get[Dummy]()
-
-    @c_wiring.wire
-    class C2:
-        @inject  # shouldn't fail
-        def method(self, d: Dummy):
-            return d
-
-    assert C().method() is world.get[Dummy]()
-
-
-def test_unwrap_class_static_methods():
-    wiring = Wiring(methods=['static', 'klass'],
-                    use_names=True)  # use_names to force injection
-
-    @wiring.wire
+def test_class_static_methods(wire):
+    @wire(methods=['static', 'klass'],
+          use_names=True)  # use_names to force injection
     class Dummy:
         @staticmethod
         def static(x):
@@ -339,19 +386,16 @@ def test_unwrap_class_static_methods():
 
 @pytest.mark.parametrize('kwargs', [
     dict(methods={'method', 'test'}),
-    dict(attempt_methods={'attempt_method', 'test'}),
     dict(dependencies="{arg_name}"),
     dict(use_names=True),
-    dict(use_type_hints=True),
-    dict(wire_super={'method'})
+    dict(auto_provide=True),
+    dict(auto_provide=True)
 ])
 def test_copy(kwargs):
     wiring = Wiring(methods=['method'],
-                    attempt_methods=['attempt_method'],
                     dependencies=dict(),
                     use_names=False,
-                    use_type_hints=False,
-                    wire_super=False)
+                    auto_provide=False)
     copy = wiring.copy(**kwargs)
     for key, value in kwargs.items():
         assert getattr(copy, key) == value
@@ -367,19 +411,15 @@ class DummyConf(WithWiringMixin):
 
 @pytest.mark.parametrize('kwargs', [
     dict(methods={'method', 'test'}),
-    dict(attempt_methods={'attempt_method', 'test'}),
     dict(dependencies="{arg_name}"),
     dict(use_names=True),
-    dict(use_type_hints=True),
-    dict(wire_super={'method'})
+    dict(auto_provide=True),
 ])
 def test_with_wiring(kwargs):
     conf = DummyConf(Wiring(methods=['method'],
-                            attempt_methods=['attempt_method'],
                             dependencies=dict(),
                             use_names=False,
-                            use_type_hints=False,
-                            wire_super=False))
+                            auto_provide=False))
     copy = conf.with_wiring(**kwargs)
     for key, value in kwargs.items():
         assert getattr(copy.wiring, key) == value
@@ -390,16 +430,9 @@ def test_with_wiring(kwargs):
         assert getattr(copy.wiring, key) == value
 
 
-def test_invalid_with_wiring():
-    with pytest.raises(TypeError):
-        DummyConf().with_wiring()
+def test_with_wiring_auto_provide():
+    conf = DummyConf(Wiring())
+    assert conf.wiring.auto_provide is False
 
-
-def test_invalid_methods():
-    wiring = Wiring(methods=['not_a_method'],
-                    use_names=True)  # use_names to force injection
-
-    with pytest.raises(TypeError, match='.*not_a_method.*'):
-        @wiring.wire
-        class Dummy:
-            not_a_method = 1
+    conf2 = conf.auto_provide()
+    assert conf2.wiring.auto_provide is True

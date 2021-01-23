@@ -77,7 +77,7 @@ them out of the box, we expect someone else to provide the examples:
     import random
     from typing import Hashable, Optional, Dict, List
 
-    from antidote import world, inject
+    from antidote import world, inject, Provide
     from antidote.core import Provider, DependencyValue, Container
 
     @world.provider
@@ -94,7 +94,7 @@ them out of the box, we expect someone else to provide the examples:
             return RandomProvider(self._values.copy())
 
         def exists(self, dependency: Hashable) -> bool:
-            return isinstance(dependency, str) and dependency in self._kind_to_values
+            return dependency in self._kind_to_values
 
         def provide(self, dependency: str, container: Container) -> DependencyValue:
             return DependencyValue(random.choice(self._kind_to_values[dependency]),
@@ -111,7 +111,9 @@ them out of the box, we expect someone else to provide the examples:
     # functions which have the provider injected. Making them easier to use and maintain.
     # Often those would be decorators, like... @factory !
     @inject
-    def add_random(kind: str, values: List[object], provider: RandomProvider = None):
+    def add_random(kind: str,
+                   values: List[object],
+                   provider: Provide[RandomProvider] = None):
         assert provider is not None
         provider.add_random(kind, values)
 

@@ -1,113 +1,71 @@
 import collections.abc as c_abc
 import inspect
-from typing import (Any, Callable, Optional, cast, Dict, Hashable, Iterable, Mapping,
-                    overload,
-                    Set, TYPE_CHECKING, TypeVar, Union, List)
+from typing import (Any, Callable, Dict, Hashable, Iterable, List, Mapping, Set,
+                    TYPE_CHECKING, Union, cast)
 
 from .exceptions import DoubleInjectionError
 from .._internal import API
 from .._internal.argspec import Arguments
-from .._internal.wrapper import (build_wrapper, get_wrapped, Injection,
-                                 InjectionBlueprint, is_wrapper)
+from .._internal.utils import YesSet
+from .._internal.wrapper import (Injection, InjectionBlueprint, build_wrapper,
+                                 get_wrapped, is_wrapper)
 
 if TYPE_CHECKING:
     from .injection import DEPENDENCIES_TYPE
 
-F = TypeVar('F', bound=Callable[..., Any])
 AnyF = Union[Callable[..., Any], staticmethod, classmethod]
 
 
-@overload
-def raw_inject(func: staticmethod,  # noqa: E704  # pragma: no cover
-               *,
-               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
-               use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None,
-               arguments: Arguments = None
-               ) -> staticmethod: ...
+@API.private
+def raw_inject(f: AnyF,
+               dependencies: 'DEPENDENCIES_TYPE',
+               use_names: Union[bool, Iterable[str]],
+               auto_provide: Union[bool, Iterable[Hashable]],
+               strict_validation: bool) -> AnyF:
+    if not isinstance(strict_validation, bool):
+        raise TypeError(f"strict_validation must be a boolean, "
+                        f"not {type(strict_validation)}")
+    if inspect.isclass(f):
+        # @inject on a class would not return a class which is
+        # counter-intuitive.
+        raise TypeError("Classes cannot be wrapped with @inject. "
+                        "Consider using @wire")
+    if not (callable(f) or isinstance(f, (classmethod, staticmethod))):
+        raise TypeError(f"wrapped object {f} is neither a callable "
+                        f"nor a class/static method")
 
+    real_f = f.__func__ if isinstance(f, (classmethod, staticmethod)) else f
+    if is_wrapper(f):
+        raise DoubleInjectionError(get_wrapped(f))
+    if is_wrapper(real_f):
+        raise DoubleInjectionError(get_wrapped(real_f))
 
-@overload
-def raw_inject(func: classmethod,  # noqa: E704  # pragma: no cover
-               *,
-               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
-               use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None,
-               arguments: Arguments = None
-               ) -> classmethod: ...
+    blueprint = _build_injection_blueprint(
+        arguments=Arguments.from_callable(f),
+        dependencies=dependencies,
+        use_names=use_names,
+        auto_provide=auto_provide,
+        strict_validation=strict_validation
+    )
+    # If nothing can be injected, just return the existing function without
+    # any overhead.
+    if blueprint.is_empty():
+        return f
 
-
-@overload
-def raw_inject(func: F,  # noqa: E704  # pragma: no cover
-               *,
-               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
-               use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None,
-               arguments: Arguments = None
-               ) -> F: ...
-
-
-@overload
-def raw_inject(*,  # noqa: E704  # pragma: no cover
-               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
-               use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None,
-               ) -> Callable[[F], F]: ...
-
-
-@API.private  # Use inject instead
-def raw_inject(func: AnyF = None,
-               *,
-               dependencies: 'Optional[DEPENDENCIES_TYPE]' = None,
-               use_names: Union[bool, Iterable[str]] = None,
-               use_type_hints: Union[bool, Iterable[str]] = None,
-               arguments: Arguments = None
-               ) -> AnyF:
-    use_names = use_names if use_names is not None else False
-    use_type_hints = use_type_hints if use_type_hints is not None else False
-
-    def _inject(f: AnyF) -> AnyF:
-        if inspect.isclass(f):
-            # @inject on a class would not return a class which is
-            # counter-intuitive.
-            raise TypeError("Classes cannot be wrapped with @inject. "
-                            "Consider using @wire")
-        if not (callable(f) or isinstance(f, (classmethod, staticmethod))):
-            raise TypeError(f"wrapped object {f} is neither a callable "
-                            f"nor a class/static method")
-
-        real_f = f.__func__ if isinstance(f, (classmethod, staticmethod)) else f
-        if is_wrapper(f):
-            raise DoubleInjectionError(get_wrapped(f))
-        if is_wrapper(real_f):
-            raise DoubleInjectionError(get_wrapped(real_f))
-
-        blueprint = _build_injection_blueprint(
-            arguments=Arguments.from_callable(f) if arguments is None else arguments,
-            dependencies=dependencies,
-            use_names=use_names,
-            use_type_hints=use_type_hints
-        )
-        # If nothing can be injected, just return the existing function without
-        # any overhead.
-        if blueprint.is_empty():
-            return f
-
-        wrapped_real_f = build_wrapper(blueprint=blueprint, wrapped=real_f)
-        if isinstance(f, staticmethod):
-            return staticmethod(wrapped_real_f)
-        if isinstance(f, classmethod):
-            return classmethod(wrapped_real_f)
-        return cast(AnyF, wrapped_real_f)
-
-    return func and _inject(func) or _inject
+    wrapped_real_f = build_wrapper(blueprint=blueprint, wrapped=real_f)
+    if isinstance(f, staticmethod):
+        return staticmethod(wrapped_real_f)
+    if isinstance(f, classmethod):
+        return classmethod(wrapped_real_f)
+    return cast(AnyF, wrapped_real_f)
 
 
 @API.private
 def _build_injection_blueprint(arguments: Arguments,
-                               dependencies: 'Optional[DEPENDENCIES_TYPE]',
+                               dependencies: 'DEPENDENCIES_TYPE',
                                use_names: Union[bool, Iterable[str]],
-                               use_type_hints: Union[bool, Iterable[str]],
+                               auto_provide: Union[bool, Iterable[Hashable]],
+                               strict_validation: bool
                                ) -> InjectionBlueprint:
     """
     Construct a InjectionBlueprint with all the necessary information about
@@ -116,22 +74,23 @@ def _build_injection_blueprint(arguments: Arguments,
 
     Used by inject()
     """
-    from .annotations import IGNORE_SENTINEL
+    annotated = _build_from_annotations(arguments)
+    explicit_dependencies = _build_from_dependencies(arguments, dependencies,
+                                                     strict_validation)
+    auto_provided = _build_auto_provide(arguments, auto_provide, annotated,
+                                        strict_validation)
+    name_as_dependency = _build_from_arg_names(arguments, use_names, strict_validation)
 
-    arg_to_dependency = _build_arg_to_dependency(arguments, dependencies)
-    type_hints = _build_type_hints(arguments, use_type_hints)
-    dependency_names = _build_dependency_names(arguments, use_names)
-    resolved_dependencies: List[object] = []
-
-    for arg in arguments:
-        d = type_hints.get(arg.name,
-                           arg.name if arg.name in dependency_names else None)
-        # Specifying explicitly Ignore in the type_hints has priority over
-        # everything else.
-        if d is IGNORE_SENTINEL:
-            resolved_dependencies.append(None)
-        else:
-            resolved_dependencies.append(arg_to_dependency.get(arg.name, d))
+    resolved_dependencies: List[object] = [
+        annotated.get(
+            arg.name,
+            explicit_dependencies.get(
+                arg.name,
+                auto_provided.get(
+                    arg.name,
+                    arg.name if arg.name in name_as_dependency else None)))
+        for arg in arguments
+    ]
 
     return InjectionBlueprint(tuple(
         Injection(arg_name=arg.name,
@@ -142,8 +101,21 @@ def _build_injection_blueprint(arguments: Arguments,
 
 
 @API.private
-def _build_arg_to_dependency(arguments: Arguments,
-                             dependencies: 'Optional[DEPENDENCIES_TYPE]'
+def _build_from_annotations(arguments: Arguments) -> Dict[str, Hashable]:
+    from ._annotations import extract_annotated_arg_dependency
+    arg_to_dependency = {}
+    for arg in arguments:
+        dependency = extract_annotated_arg_dependency(arg)
+        if dependency is not None:
+            arg_to_dependency[arg.name] = dependency
+
+    return arg_to_dependency
+
+
+@API.private
+def _build_from_dependencies(arguments: Arguments,
+                             dependencies: 'DEPENDENCIES_TYPE',
+                             strict_validation: bool
                              ) -> Dict[str, Hashable]:
     from .injection import Arg
     if dependencies is None:
@@ -159,12 +131,12 @@ def _build_arg_to_dependency(arguments: Arguments,
                                                         arg.type_hint_with_extras))
                              for arg in arguments.without_self}
     elif isinstance(dependencies, c_abc.Mapping):
-        _check_valid_arg_names(dependencies.keys(), arguments)
+        _check_valid_arg_names(dependencies.keys(), arguments, strict_validation)
         arg_to_dependency = dependencies
     elif isinstance(dependencies, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
         dependencies = tuple(dependencies)
-        if len(arguments.without_self) < len(dependencies):
+        if strict_validation and len(arguments.without_self) < len(dependencies):
             raise ValueError(f"More dependencies ({dependencies}) were provided "
                              f"than arguments ({arguments})")
         arg_to_dependency = {arg.name: dependency
@@ -179,35 +151,46 @@ def _build_arg_to_dependency(arguments: Arguments,
 
 
 @API.private
-def _build_type_hints(arguments: Arguments,
-                      use_type_hints: Union[bool, Iterable[str]]) -> Dict[str, Hashable]:
-    from ._annotations import extract_argument_dependency
+def _build_auto_provide(arguments: Arguments,
+                        auto_provide: Union[bool, Iterable[Hashable]],
+                        annotated: Dict[str, Hashable],
+                        strict_validation: bool
+                        ) -> Dict[str, Hashable]:
+    from ._annotations import extract_auto_provided_arg_dependency
 
-    if use_type_hints is True:
-        use_type_hints = {arg.name for arg in arguments.without_self}
-    elif use_type_hints is False:
-        use_type_hints = set()
-    elif isinstance(use_type_hints, c_abc.Iterable):
+    if auto_provide is True:
+        auto_provide = YesSet()
+    elif auto_provide is False:
+        auto_provide = set()
+    elif isinstance(auto_provide, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
-        use_type_hints = set(use_type_hints)
-        _check_valid_arg_names(use_type_hints, arguments)
+        auto_provide = set(auto_provide)
     else:
         raise TypeError(f"Only an iterable or a boolean is supported for "
-                        f"use_type_hints, not {type(use_type_hints)!r}")
+                        f"auto_provide, not {type(auto_provide)!r}")
 
-    arg_to_dependency = {}
+    auto_provided = {}
     for arg in arguments.without_self:
-        dependency = extract_argument_dependency(arg,
-                                                 use_type_hint=arg.name in use_type_hints)
-        if dependency is not None:
-            arg_to_dependency[arg.name] = dependency
+        dependency = extract_auto_provided_arg_dependency(arg)
+        if dependency is not None and dependency in auto_provide:
+            auto_provided[arg.name] = dependency
 
-    return arg_to_dependency
+    provided_dependencies = set(auto_provided.values()).union(annotated.values())
+    if strict_validation and not (isinstance(auto_provide, bool)
+                                  or auto_provide.issubset(provided_dependencies)):
+        raise ValueError(f"Some auto_provide dependencies ({auto_provide}) are not "
+                         f"present in the function. Found: {provided_dependencies}\n"
+                         f"Either ensure that auto_provide matches the function type "
+                         f"hints or consider specifying strict_validation=False")
+
+    return auto_provided
 
 
 @API.private
-def _build_dependency_names(arguments: Arguments,
-                            use_names: Union[bool, Iterable[str]]) -> Set[str]:
+def _build_from_arg_names(arguments: Arguments,
+                          use_names: Union[bool, Iterable[str]],
+                          strict_validation: bool
+                          ) -> Set[str]:
     if use_names is False:
         return set()
     elif use_names is True:
@@ -215,7 +198,7 @@ def _build_dependency_names(arguments: Arguments,
     elif isinstance(use_names, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
         use_names = tuple(use_names)
-        _check_valid_arg_names(use_names, arguments)
+        _check_valid_arg_names(use_names, arguments, strict_validation)
         return set(use_names)
     else:
         raise TypeError(f'Only an iterable or a boolean is supported for '
@@ -223,13 +206,16 @@ def _build_dependency_names(arguments: Arguments,
 
 
 @API.private
-def _check_valid_arg_names(names: Iterable[str], arguments: Arguments) -> None:
+def _check_valid_arg_names(names: Iterable[str],
+                           arguments: Arguments,
+                           strict_validation: bool) -> None:
     for name in names:
         if not isinstance(name, str):
             raise TypeError(f"Expected argument name (str), "
-                            f"not {type(name)}")
-        if name not in arguments:
-            raise ValueError(f"Unknown argument '{name}'")
+                            f"not {name!r}")
         if arguments.has_self and name == arguments[0].name:
             raise ValueError(f"Cannot inject first argument "
-                             f"('{arguments[0]}') of a method")
+                             f"({arguments[0]!r}) of a method / @classmethod.")
+
+        if strict_validation and name not in arguments:
+            raise ValueError(f"Unknown argument {name!r}")

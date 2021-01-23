@@ -15,7 +15,7 @@ First of all, let's start with a quick example:
 
 .. testcode:: tutorial_overview
 
-    from antidote import inject, world
+    from antidote import inject, world, Provide
 
     class MyService:
         pass
@@ -23,7 +23,7 @@ First of all, let's start with a quick example:
     world.singletons.add(MyService, MyService())
 
     @inject
-    def f(service: MyService):
+    def f(service: Provide[MyService]):
         # doing stuff
         return service
 
@@ -134,7 +134,7 @@ to some external service like a database:
 
 .. testcode:: tutorial_services
 
-    from antidote import inject, Service
+    from antidote import inject, Service, Provide
 
     # Automatically declared by inheriting Service
     class Database(Service):
@@ -142,7 +142,7 @@ to some external service like a database:
             self.users = [dict(name='Bob')]
 
     @inject
-    def get_user_count(db: Database):
+    def get_user_count(db: Provide[Database]):
         return len(db.users)
 
 .. doctest:: tutorial_services
@@ -158,7 +158,7 @@ But that's just the tip of the iceberg ! By default it'll also auto wire
 .. testcode:: tutorial_services
 
     class UserAPI(Service):
-        def __init__(self, database: Database):
+        def __init__(self, database: Provide[Database]):
             self.database = database
 
         def get_user_count(self):
@@ -189,7 +189,7 @@ your :py:class:`.Service` with a custom :py:class`.Service.Conf` to be defined i
         # parameters !
         __antidote__ = Service.Conf(singleton=False)
 
-        def __init__(self, database: Database, name: str = 'my_metric'):
+        def __init__(self, database: Provide[Database], name: str = 'my_metric'):
             self.name = name
             self._database = database
             self._buffer = []
@@ -470,9 +470,9 @@ dependencies which you don't own, like library classes.
         def __init__(self, url: str):
             self.url = url
 
-    # To avoid repetition, @factory will auto-wire by default and supports all the
-    # arguments of @inject
-    @factory(use_names=True)
+
+    @factory
+    @inject(use_names=True)
     def default_db(url: str) -> Database:  # return type MUST be specified
         return Database(url)
 
@@ -528,13 +528,13 @@ the injection to be used:
 
 .. testcode:: tutorial_test_debug
 
-    from antidote import Service, inject
+    from antidote import Service, inject, Provide
 
     class MyService(Service):
         pass
 
     @inject
-    def f(my_service: MyService):
+    def f(my_service: Provide[MyService]):
         pass
 
     # injection

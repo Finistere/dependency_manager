@@ -1,5 +1,7 @@
 import collections.abc as c_abc
-from typing import (Callable, FrozenSet, Iterable, Optional, Tuple, TypeVar, Union,
+import enum
+from typing import (Callable, FrozenSet, Hashable, Iterable, Optional, TypeVar,
+                    Union,
                     overload)
 
 from .injection import DEPENDENCIES_TYPE, validate_injection
@@ -9,6 +11,10 @@ from .._internal.utils import Copy, FinalImmutable
 
 C = TypeVar('C', bound=type)
 _empty_set: FrozenSet[str] = frozenset()
+
+
+class Methods(enum.Enum):
+    ALL = enum.auto()
 
 
 @API.public
@@ -24,7 +30,7 @@ class Wiring(FinalImmutable):
       or using `@inject` when using :code:`attempt_methods`.
     - wiring of multiple methods with similar dependencies.
 
-    Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`use_type_hints`)
+    Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`auto_provide`)
     are adapted for match the arguments of the method. Hence :py:func:`~.injection.inject`
     won't raise an error that it has too much dependencies.
 
@@ -41,73 +47,69 @@ class Wiring(FinalImmutable):
         ... w_copy = w.copy(use_names=True)
 
     """
-    __slots__ = ('methods', 'auto_wire', 'dependencies', 'use_names',
-                 'use_type_hints')
-    auto_wire: Union[bool, FrozenSet[str]]
-    methods: FrozenSet[str]
+    __slots__ = ('methods', 'auto_provide', 'dependencies', 'use_names',
+                 'raise_on_double_injection')
+    methods: Union[Methods, FrozenSet[str]]
     """Method names that must be injected."""
     dependencies: DEPENDENCIES_TYPE
     use_names: Union[bool, FrozenSet[str]]
-    use_type_hints: Union[bool, FrozenSet[str]]
+    auto_provide: Union[bool, FrozenSet[str]]
+    raise_on_double_injection: bool
 
     def __init__(self,
                  *,
-                 auto_wire: Union[bool, Iterable[str]] = False,
-                 methods: Iterable[str] = None,
+                 methods: Union[Methods, Iterable[str]] = Methods.ALL,
                  dependencies: DEPENDENCIES_TYPE = None,
                  use_names: Union[bool, Iterable[str]] = False,
-                 use_type_hints: Union[bool, Iterable[str]] = False) -> None:
+                 auto_provide: Union[bool, Iterable[Hashable]] = False,
+                 raise_on_double_injection: bool = False) -> None:
         """
         Args:
             methods: Names of methods to be injected. If any of them is already injected,
                 an error will be raised. Consider using :code:`attempt_methods` otherwise.
-            attempt_methods: Names of methods that will be injected if present and if not
-                already injected. Typically used to declare methods that should be
-                injected in subclasses.
             dependencies: Propagated for every method to :py:func:`~.injection.inject`
             use_names: Propagated for every method to :py:func:`~.injection.inject`
-            use_type_hints: Propagated for every method to :py:func:`~.injection.inject`
+            auto_provide: Propagated for every method to :py:func:`~.injection.inject`
         """
+        if not isinstance(raise_on_double_injection, bool):
+            raise TypeError(f"raise_on_double_injection must be a boolean, "
+                            f"not {type(raise_on_double_injection)}")
 
-        if isinstance(auto_wire, str) \
-                or not isinstance(auto_wire, (c_abc.Iterable, bool)):
-            raise TypeError(f"auto_wire must be an iterable of method names, "
-                            f"not {type(auto_wire)}.")
-        if isinstance(auto_wire, c_abc.Iterable):
-            auto_wire = frozenset(auto_wire)
-            if not all(isinstance(method, str) for method in auto_wire):
-                raise TypeError("auto_wire is expected to contain methods names (str)")
+        if isinstance(auto_provide, str) \
+                or not isinstance(auto_provide, (c_abc.Iterable, bool)):
+            raise TypeError(f"auto_provide must be an iterable of method names, "
+                            f"not {type(auto_provide)}.")
+        if isinstance(auto_provide, c_abc.Iterable):
+            auto_provide = frozenset(auto_provide)
 
-        if methods is None:
-            methods = frozenset()
-        elif isinstance(methods, str) or not isinstance(methods, c_abc.Iterable):
+        if isinstance(methods, str) or not isinstance(methods, (c_abc.Iterable, Methods)):
             raise TypeError(f"methods must be an iterable of method names, "
                             f"not {type(methods)}.")
-        else:
+        elif isinstance(methods, c_abc.Iterable):
             methods = frozenset(methods)
-        if not all(isinstance(method, str) for method in methods):
-            raise TypeError("methods is expected to contain methods names (str)")
+            if not all(isinstance(method, str) for method in methods):
+                raise TypeError("methods is expected to contain methods names (str)")
 
         if not isinstance(use_names, str) and isinstance(use_names, c_abc.Iterable):
             use_names = frozenset(use_names)
-        if not isinstance(use_type_hints, str) and isinstance(use_type_hints,
-                                                              c_abc.Iterable):
-            use_type_hints = frozenset(use_type_hints)
-        validate_injection(dependencies, use_names, use_type_hints)
+        if not isinstance(auto_provide, str) and isinstance(auto_provide,
+                                                            c_abc.Iterable):
+            auto_provide = frozenset(auto_provide)
+        validate_injection(dependencies, use_names, auto_provide)
 
-        super().__init__(auto_wire=auto_wire,
-                         methods=methods,
+        super().__init__(methods=methods,
                          dependencies=dependencies,
                          use_names=use_names,
-                         use_type_hints=use_type_hints)
+                         auto_provide=auto_provide,
+                         raise_on_double_injection=raise_on_double_injection)
 
     def copy(self,
              *,
-             auto_wire: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-             methods: Union[Iterable[str], Copy] = Copy.IDENTICAL,
+             methods: Union[Methods, Iterable[str], Copy] = Copy.IDENTICAL,
              dependencies: Union[Optional[DEPENDENCIES_TYPE], Copy] = Copy.IDENTICAL,
              use_names: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
-             use_type_hints: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL
+             auto_provide: Union[bool, Iterable[Hashable], Copy] = Copy.IDENTICAL,
+             raise_on_double_injection: Union[bool, Copy] = Copy.IDENTICAL
              ) -> 'Wiring':
         """
         Copies current wiring and overrides only specified arguments.
@@ -115,87 +117,87 @@ class Wiring(FinalImmutable):
         """
         return Copy.immutable(self,
                               methods=methods,
-                              auto_wire=auto_wire,
                               dependencies=dependencies,
                               use_names=use_names,
-                              use_type_hints=use_type_hints)
+                              auto_provide=auto_provide,
+                              raise_on_double_injection=raise_on_double_injection)
 
-    def wire(self, klass: C) -> C:
+    def wire(self, __klass: C) -> C:
         """
         Used to wire a class with specified configuration.
 
         Args:
-            klass: Class to wired
+            __klass: Class to wired
 
         Returns:
             The same class object with specified methods injected.
         """
         from ._wiring import wire_class
-        return wire_class(klass, self)
+        return wire_class(__klass, self)
 
 
 @overload
-def wire(klass: C,  # noqa: E704  # pragma: no cover
+def wire(__klass: C,  # noqa: E704  # pragma: no cover
          *,
-         auto_wire: Union[bool, Iterable[str]] = False,
-         methods: Iterable[str] = None,
+         methods: Union[Methods, Iterable[str]] = Methods.ALL,
          dependencies: DEPENDENCIES_TYPE = None,
          use_names: Union[bool, Iterable[str]] = False,
-         use_type_hints: Union[bool, Iterable[str]] = False
+         auto_provide: Union[bool, Iterable[Hashable]] = False,
+         raise_on_double_injection: bool = False
          ) -> C: ...
 
 
 @overload
 def wire(*,  # noqa: E704  # pragma: no cover
-         auto_wire: Union[bool, Iterable[str]] = False,
-         methods: Iterable[str] = None,
+         methods: Union[Methods, Iterable[str]] = Methods.ALL,
          dependencies: DEPENDENCIES_TYPE = None,
          use_names: Union[bool, Iterable[str]] = False,
-         use_type_hints: Union[bool, Iterable[str]] = False
+         auto_provide: Union[bool, Iterable[Hashable]] = False,
+         raise_on_double_injection: bool = False
          ) -> Callable[[C], C]: ...
 
 
 @API.public
-def wire(klass: C = None,
+def wire(__klass: C = None,
          *,
-         auto_wire: Union[bool, Iterable[str]] = False,
-         methods: Iterable[str] = None,
+         methods: Union[Methods, Iterable[str]] = Methods.ALL,
          dependencies: DEPENDENCIES_TYPE = None,
          use_names: Union[bool, Iterable[str]] = False,
-         use_type_hints: Union[bool, Iterable[str]] = False
+         auto_provide: Union[bool, Iterable[Hashable]] = False,
+         raise_on_double_injection: bool = False
          ) -> Union[C, Callable[[C], C]]:
     """
     Wire a class by injecting specified methods. This avoids repetition if similar
     dependencies need to be injected in different methods.
 
-    Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`use_type_hints`)
+    Injection arguments (:code:`dependencies`, :code:`use_names`,  :code:`auto_provide`)
     are adapted for match the arguments of the method. Hence :py:func:`~.injection.inject`
     won't raise an error that it has too much dependencies.
 
     Args:
-        klass: Class to wire.
+        __klass: Class to wire.
         methods: Names of methods that must be injected.
         dependencies: Propagated for every method to :py:func:`~.injection.inject`.
         use_names: Propagated for every method to :py:func:`~.injection.inject`.
-        use_type_hints: Propagated for every method to :py:func:`~.injection.inject`.
+        auto_provide: Propagated for every method to :py:func:`~.injection.inject`.
 
     Returns:
         Wired class or a class decorator.
 
     """
     wiring = Wiring(
-        auto_wire=auto_wire,
         methods=methods,
         dependencies=dependencies,
         use_names=use_names,
-        use_type_hints=use_type_hints
+        auto_provide=auto_provide,
+        raise_on_double_injection=raise_on_double_injection
     )
 
     def wire_methods(cls: C) -> C:
         from ._wiring import wire_class
         return wire_class(cls, wiring)
 
-    return klass and wire_methods(klass) or wire_methods
+    return __klass and wire_methods(__klass) or wire_methods
 
 
 W = TypeVar('W', bound='WithWiringMixin')
@@ -216,24 +218,18 @@ class WithWiringMixin:
     def copy(self: W, *, wiring: Union[Optional[Wiring], Copy] = Copy.IDENTICAL) -> W:
         raise NotImplementedError()  # pragma: no cover
 
-    def auto_wire(self: W, *methods: str) -> W:
-        if not methods:
-            auto_wire: Union[bool, Tuple[str, ...]] = True
-        else:
-            if not all(isinstance(method, str) for method in methods):
-                raise TypeError("auto_wire can only be called with methods names (str)")
-            auto_wire = methods
-
-        return self.copy(wiring=(Wiring(auto_wire=auto_wire)
+    def auto_provide(self: W) -> W:
+        return self.copy(wiring=(Wiring(auto_provide=True)
                                  if self.wiring is None else
-                                 self.wiring.copy(auto_wire=auto_wire)))
+                                 self.wiring.copy(auto_provide=True)))
 
     def with_wiring(self: W,
                     *,
-                    methods: Iterable[str],
-                    dependencies: DEPENDENCIES_TYPE = None,
-                    use_names: Union[bool, Iterable[str]] = False,
-                    use_type_hints: Union[bool, Iterable[str]] = False
+                    methods: Union[Methods, Iterable[str], Copy] = Copy.IDENTICAL,
+                    dependencies: Union[DEPENDENCIES_TYPE, Copy] = Copy.IDENTICAL,
+                    use_names: Union[bool, Iterable[str], Copy] = Copy.IDENTICAL,
+                    auto_provide: Union[bool, Iterable[Hashable], Copy] = Copy.IDENTICAL,
+                    raise_on_double_injection: Union[bool, Copy] = Copy.IDENTICAL,
                     ) -> W:
         """
         Accepts the same arguments as :py:class:`~.Wiring`. And behaves the same way
@@ -244,12 +240,16 @@ class WithWiringMixin:
             provided arguments.
         """
         if self.wiring is None:
-            return self.copy(wiring=Wiring(methods=methods,
-                                           dependencies=dependencies,
-                                           use_names=use_names,
-                                           use_type_hints=use_type_hints))
+            return self.copy(wiring=Wiring().copy(
+                methods=methods,
+                dependencies=dependencies,
+                use_names=use_names,
+                auto_provide=auto_provide,
+                raise_on_double_injection=raise_on_double_injection))
         else:
-            return self.copy(wiring=self.wiring.copy(methods=methods,
-                                                     dependencies=dependencies,
-                                                     use_names=use_names,
-                                                     use_type_hints=use_type_hints))
+            return self.copy(wiring=self.wiring.copy(
+                methods=methods,
+                dependencies=dependencies,
+                use_names=use_names,
+                auto_provide=auto_provide,
+                raise_on_double_injection=raise_on_double_injection))

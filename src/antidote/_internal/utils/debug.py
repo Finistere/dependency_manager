@@ -124,18 +124,30 @@ def tree_debug_info(container: 'RawContainer',
     def add_root_injections(parent: DebugTreeNode,
                             parent_dependencies: Set[object],
                             dependency: Hashable) -> None:
+        from ...core.wiring import Methods
+
         if isinstance(dependency, type) and inspect.isclass(dependency):
             cls = dependency
             conf = getattr(cls, '__antidote__', None)
             if conf is not None \
                     and isinstance(conf, WithWiringMixin) \
                     and conf.wiring is not None:
-                for m in sorted(conf.wiring.methods):
-                    if m != '__init__':
-                        tasks.append((parent, parent_dependencies, InjectionTask(
-                            name=f"Method: {m}",
-                            injections=get_injections(getattr(cls, m)),
-                        )))
+                if isinstance(conf.wiring.methods, Methods):
+                    for name, member in cls.__dict__.items():
+                        if name != '__init__' and callable(member):
+                            injections = get_injections(member)
+                            if injections:
+                                tasks.append((parent, parent_dependencies, InjectionTask(
+                                    name=f"Method: {name}",
+                                    injections=injections,
+                                )))
+                else:
+                    for name in sorted(conf.wiring.methods):
+                        if name != '__init__':
+                            tasks.append((parent, parent_dependencies, InjectionTask(
+                                name=f"Method: {name}",
+                                injections=get_injections(getattr(cls, name)),
+                            )))
         elif callable(dependency):
             for d in get_injections(dependency):
                 tasks.append((parent, parent_dependencies, DependencyTask(d)))

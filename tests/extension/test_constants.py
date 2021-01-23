@@ -164,4 +164,4 @@ def test_conf_copy(kwargs):
 
 def test_conf_repr():
     conf = Constants.Conf()
-    assert "__init__" in repr(conf)
+    assert "auto_cast" in repr(conf)

@@ -73,8 +73,7 @@ In short, how does Antidote compare to other libraries ?
   any missing argument based on the type hint. Antidote will only inject dependencies that you have defined
   as such. This might sound cumbersome, but it doesn't require anything more that inheriting :code:`Service` or being
   decorated with :code:`@service`. It improves maintainability as it is easy to understand what is going on, you know
-  what was
-with the notable exception of dependency_injector_, all libraries have less features
+  what was with the notable exception of dependency_injector_, all libraries have less features
 
 The most popular dependency injection libraries I know of are:
 

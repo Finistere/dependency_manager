@@ -5,8 +5,10 @@ from ._compatibility.typing import Protocol, final, get_type_hints
 from ._factory import FactoryMeta, FactoryWrapper, PreBuild
 from ._internal import API
 from ._internal.utils import Copy, FinalImmutable
+from ._internal.wrapper import is_wrapper
 from ._providers import FactoryProvider, Tag, TagProvider
-from .core import Scope, Wiring, WithWiringMixin, inject
+from .core import Provide, Scope, Wiring, WithWiringMixin, inject
+from .core.exceptions import DoubleInjectionError
 from .utils import validated_scope, validated_tags
 
 F = TypeVar('F', bound=Callable[..., object])
@@ -287,11 +289,13 @@ def factory(f: F = None,
 
     @inject
     def register_factory(func: F,
-                         factory_provider: FactoryProvider = None,
-                         tag_provider: TagProvider = None) -> FactoryProtocol[F]:
+                         factory_provider: Provide[FactoryProvider] = None,
+                         tag_provider: Provide[TagProvider] = None) -> FactoryProtocol[F]:
         assert factory_provider is not None
 
-        if not inspect.isfunction(func):
+        if not (inspect.isfunction(func)
+                or (is_wrapper(func)
+                    and inspect.isfunction(func.__wrapped__))):  # type: ignore
             raise TypeError(f"{func} is not a function")
 
         output = get_type_hints(func).get('return')
@@ -304,6 +308,11 @@ def factory(f: F = None,
 
         if tags is not None and tag_provider is None:
             raise RuntimeError("No TagProvider registered, cannot use tags.")
+
+        try:
+            func = inject(func)
+        except DoubleInjectionError:
+            pass
 
         dependency = factory_provider.register(factory=func,
                                                scope=scope,

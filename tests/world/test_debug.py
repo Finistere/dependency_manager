@@ -1,6 +1,10 @@
 import textwrap
 
-from antidote import (Constants, LazyCall, LazyMethodCall, Service, Tag, Tagged, const,
+from typing_extensions import Annotated
+
+from antidote import (Constants, From, LazyCall, LazyMethodCall, Provide, Service, Tag,
+                      Tagged,
+                      const,
                       factory, implementation, inject, world)
 from antidote._internal.utils import short_id
 
@@ -119,7 +123,7 @@ def test_lazy_call_debug():
             pass
 
         @inject
-        def f(service: MyService):
+        def f(service: Provide[MyService]):
             pass
 
         l2 = LazyCall(f)
@@ -151,7 +155,7 @@ def test_unknown_debug():
             pass
 
         class Dummy(Service):
-            def __init__(self, s: Service1):
+            def __init__(self, s: Provide[Service1]):
                 pass
 
         assert_valid(DebugTestCase(
@@ -182,11 +186,12 @@ def test_wiring_debug():
         class Service1(Service):
             pass
 
+        # Not wired, but @inject
         class DummyA(Service):
             __antidote__ = Service.Conf(wiring=None)
 
             @inject
-            def __init__(self, service: Service1):
+            def __init__(self, service: Provide[Service1]):
                 pass
 
         assert_valid(DebugTestCase(
@@ -197,13 +202,14 @@ def test_wiring_debug():
             """
         ))
 
+        # Multiple injections
         class DummyB(Service):
-            __antidote__ = Service.Conf().with_wiring(methods=['__init__', 'get'])
+            __antidote__ = Service.Conf()
 
-            def __init__(self, s: Service1):
+            def __init__(self, s: Provide[Service1]):
                 pass
 
-            def get(self, s: Service1):
+            def get(self, s: Provide[Service1]):
                 pass
 
         assert_valid(DebugTestCase(
@@ -216,6 +222,42 @@ def test_wiring_debug():
             """
         ))
 
+        # Methods specified
+        class DummyC(Service):
+            __antidote__ = Service.Conf().with_wiring(methods=['__init__', 'get'])
+
+            def __init__(self):
+                pass
+
+            def get(self, my_service: Provide[Service1]):
+                pass
+
+        assert_valid(
+            DebugTestCase(
+                value=DummyC,
+                expected=f"""
+                {prefix}.DummyC
+                └── Method: get
+                    └── {prefix}.Service1
+                    """
+            ))
+
+        # No injections
+        class DummyD(Service):
+            def __init__(self):
+                pass
+
+            def get(self):
+                pass
+
+        assert_valid(
+            DebugTestCase(
+                value=DummyD,
+                expected=f"""
+                    {prefix}.DummyD
+                    """
+            ))
+
 
 def test_multiline_debug():
     prefix = "tests.world.test_debug.test_multiline_debug.<locals>"
@@ -227,7 +269,7 @@ def test_multiline_debug():
                 return "Multiline\nService"
 
         class Dummy(Service):
-            def __init__(self, s: MultilineService):
+            def __init__(self, s: Provide[MultilineService]):
                 pass
 
         assert_valid(DebugTestCase(
@@ -268,8 +310,7 @@ def test_lazy_method_debug():
             pass
 
         class Conf(Service):
-            @inject
-            def fetch(self, value, service: MyService):
+            def fetch(self, value, service: Provide[MyService]):
                 return value
 
             DATA = LazyMethodCall(fetch)
@@ -343,8 +384,7 @@ def test_constants_debug():
         class Conf(Constants):
             TEST = const('1')
 
-            @inject
-            def get(self, key, service: MyService):
+            def get(self, key, service: Provide[MyService] = None):
                 return key
 
         assert_valid(
@@ -369,8 +409,7 @@ def test_custom_scope():
             __antidote__ = Service.Conf(scope=dummy_scope)
 
         class BigService(Service):
-            @inject
-            def __init__(self, my_service: MyService):
+            def __init__(self, my_service: Provide[MyService]):
                 pass
 
         assert_valid(
@@ -401,11 +440,11 @@ def test_complex_debug():
             pass
 
         class Service2:
-            def __init__(self, service1: Service1):
+            def __init__(self, service1: Provide[Service1]):
                 self.service1 = service1
 
         @factory
-        def build_s2(service1: Service1) -> Service2:
+        def build_s2(service1: Provide[Service1]) -> Service2:
             return Service2(service1)
 
         @implementation(Interface)
@@ -415,36 +454,36 @@ def test_complex_debug():
         class Service3(Service):
             __antidote__ = Service.Conf(singleton=False,
                                         tags=[tag]).with_wiring(
-                methods=['__init__', 'get'],
                 dependencies=dict(
                     i=Interface @ impl,
                     service2=Service2 @ build_s2))
 
             def __init__(self,
-                         service1: Service1,
+                         service1: Provide[Service1],
                          service2: Service2,
                          i: Interface):
                 self.service1 = service1
                 self.service2 = service2
                 self.i = i
 
-            def get(self, service1: Service1):
+            def get(self, service1: Provide[Service1]):
                 pass
 
             X = LazyMethodCall(get)
 
         class Service4(Interface, Service):
-            __antidote__ = Service.Conf(tags=[tag]).with_wiring(
-                dependencies=dict(service2=Service2 @ build_s2))
+            __antidote__ = Service.Conf(tags=[tag])
 
-            def __init__(self, service1: Service1, service2: Service2,
-                         service3: Service3):
+            def __init__(self,
+                         service1: Provide[Service1],
+                         service2: Annotated[Service2, From(build_s2)],
+                         service3: Provide[Service3]):
                 self.service1 = service1
                 self.service2 = service2
                 self.service3 = service3
 
         @inject
-        def f(s: Service4):
+        def f(s: Provide[Service4]):
             pass
 
         @inject(dependencies=[Service1.with_kwargs(test=1),

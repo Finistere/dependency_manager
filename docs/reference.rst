@@ -120,7 +120,7 @@ Inject
 
 Annotations
 ^^^^^^^^^^^
-.. automodule:: antidote.annotations
+.. automodule:: antidote.core.annotations
     :members:
 
 Wiring

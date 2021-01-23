@@ -1,5 +1,5 @@
 import enum
-from typing import TypeVar
+from typing import Set, TypeVar
 
 from .debug import debug_repr, short_id
 from .immutable import FinalImmutable, Immutable
@@ -16,6 +16,15 @@ class Default(enum.Enum):
 
 
 @API.private
+class YesSet(Set[object]):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def __contains__(self, item: object) -> bool:
+        return True
+
+
+@API.private
 class Copy(enum.Enum):
     IDENTICAL = enum.auto()
 
@@ -28,4 +37,4 @@ class Copy(enum.Enum):
 
 
 __all__ = ['debug_repr', 'short_id', 'FinalImmutable', 'Immutable', 'AbstractMeta',
-           'FinalMeta', 'SlotRecord', 'API', 'Default', 'Copy']
+           'FinalMeta', 'SlotRecord', 'API', 'Default', 'Copy', 'YesSet']

@@ -192,4 +192,4 @@ def test_invalid_copy():
 
 def test_conf_repr():
     conf = Service.Conf()
-    assert "__init__" in repr(conf)
+    assert "scope" in repr(conf)

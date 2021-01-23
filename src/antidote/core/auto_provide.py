@@ -9,25 +9,22 @@ F = TypeVar('F', bound=Callable[..., Any])
 
 
 @overload
-def auto_wire(__obj: staticmethod) -> staticmethod: ...
+def auto_provide(__obj: staticmethod  # noqa: E704  # pragma: no cover
+                 ) -> staticmethod: ...
 
 
 @overload
-def auto_wire(__obj: classmethod) -> classmethod: ...
+def auto_provide(__obj: classmethod) -> classmethod: ...  # noqa: E704  # pragma: no cover
 
 
 @overload
-def auto_wire(__obj: F) -> F: ...
-
-
-@overload
-def auto_wire() -> Callable[[F], F]: ...
+def auto_provide(__obj: F) -> F: ...  # noqa: E704  # pragma: no cover
 
 
 @API.public
-def auto_wire(__obj: Any = None) -> Any:
+def auto_provide(__obj: Any = None) -> Any:
     """
-    Wrapper of :py:func:`.inject` with :code:`use_type_hints=True` by default. Meaning
+    Wrapper of :py:func:`.inject` with :code:`auto_provide=True` by default. Meaning
     that it'll try to inject dependencies based on the type hints contrary to
     :py:func:`.inject` where everything must be explicitly specified.
 
@@ -37,18 +34,18 @@ def auto_wire(__obj: Any = None) -> Any:
         >>> from antidote import world, Service
         >>> class MyService(Service):
         ...     pass
-        >>> @auto_wire
+        >>> @auto_provide
         ... def f(a: MyService):
         ...     pass
         >>> # is equivalent to:
-        ... @inject(use_type_hints=True)
+        ... @inject(auto_provide=True)
         ... def f(a: MyService):
         ...     pass  # a = world.get(MyService)
 
     Args:
         func: Callable to be wrapped. Can also be used on static methods or class methods.
         dependencies: Explicit definition of the dependencies which overrides
-            :code:`use_names` and :code:`use_type_hints`. Defaults to :py:obj:`None`.
+            :code:`use_names` and :code:`auto_provide`. Defaults to :py:obj:`None`.
             Can be one of:
 
             - Mapping from argument name to its dependency
@@ -67,13 +64,10 @@ def auto_wire(__obj: Any = None) -> Any:
         argument :code:`func` was supplied.
     """
 
-    def _auto_wire(obj: Any) -> Any:
-        if isinstance(obj, type) and inspect.isclass(obj):
-            return wire(obj, auto_wire=True)
-        elif callable(obj) or isinstance(obj, (classmethod, staticmethod)):
-            return inject(obj, use_type_hints=True)
+    if isinstance(__obj, type) and inspect.isclass(__obj):
+        return wire(__obj, auto_provide=True)
+    elif callable(__obj) or isinstance(__obj, (classmethod, staticmethod)):
+        return inject(__obj, auto_provide=True)
 
-        raise TypeError(f"Only classes, methods and functions can be wired, "
-                        f"not {type(obj)}")
-
-    return __obj and _auto_wire(__obj) or _auto_wire
+    raise TypeError(f"Only classes, methods and functions can be wired, "
+                    f"not {type(__obj)}")

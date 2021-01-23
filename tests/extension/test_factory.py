@@ -2,7 +2,7 @@ from typing import Any, Callable, Type
 
 import pytest
 
-from antidote import Factory, factory, Tag, Wiring, world
+from antidote import Factory, Provide, Service, factory, Tag, Wiring, inject, world
 from antidote._providers import (FactoryProvider, LazyProvider, ServiceProvider,
                                  TagProvider)
 
@@ -163,12 +163,12 @@ def test_missing_return_type_hint():
                                           {arg: object()},
                                           lambda: None,
                                           id=arg)
-                             for arg in ['auto_wire',
+                             for arg in ['auto_provide',
                                          'singleton',
                                          'scope',
                                          'dependencies',
                                          'use_names',
-                                         'use_type_hints',
+                                         'auto_provide',
                                          'tags']
                          ])
 def test_invalid_factory_args(expectation, kwargs: dict, func: Callable[..., object]):
@@ -234,4 +234,42 @@ def test_invalid_copy():
 
 def test_conf_repr():
     conf = Factory.Conf()
-    assert "__init__" in repr(conf)
+    assert "scope" in repr(conf)
+
+
+def test_default_injection():
+    class MyService(Service):
+        pass
+
+    class A:
+        pass
+
+    injected = None
+
+    @factory
+    def build_a(s: Provide[MyService]) -> A:
+        nonlocal injected
+        injected = s
+        return A()
+
+    assert isinstance(world.get(A @ build_a), A)
+    assert injected is world.get(MyService)
+
+
+def test_double_injection():
+    world.singletons.add('s', object())
+
+    class A:
+        pass
+
+    injected = None
+
+    @factory
+    @inject(use_names=True)
+    def build_a(s) -> A:
+        nonlocal injected
+        injected = s
+        return A()
+
+    assert isinstance(world.get(A @ build_a), A)
+    assert injected is world.get('s')

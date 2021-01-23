@@ -4,8 +4,9 @@ from typing import Hashable, Optional
 import pytest
 
 from antidote import world
-from antidote.core import (Container, DependencyValue, does_not_freeze, Provider,
-                           StatelessProvider)
+from antidote.core import (Container, DependencyValue, Provider, StatelessProvider,
+                           does_not_freeze)
+from antidote.core.exceptions import DuplicateDependencyError
 from antidote.exceptions import FrozenWorldError
 
 
@@ -86,7 +87,7 @@ def test_no_default_implementation():
     with pytest.raises(NotImplementedError):
         Dummy().clone(False)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(NotImplementedError):
         Dummy().provide(object(), object())
 
     with pytest.raises(NotImplementedError):
@@ -181,3 +182,57 @@ def test_container_lock():
 
         # Should not raise any error if not bound to any container yet
         C().change_state()
+
+
+def test_assert_not_duplicate():
+    x = object()
+
+    class A(Provider[Hashable]):
+        def __init__(self):
+            super().__init__()
+            self.registered = dict()
+
+        def exists(self, dependency: Hashable) -> bool:
+            return dependency in self.registered
+
+        def provide(self,
+                    dependency: Hashable,
+                    container: Container) -> DependencyValue:
+            return DependencyValue(self.registered[dependency])
+
+        def add(self, dependency: Hashable, value: object):
+            self._assert_not_duplicate(dependency)
+            self.registered[dependency] = value
+
+    with world.test.empty():
+        a = A()
+        a.add(x, 1)
+
+        with pytest.raises(DuplicateDependencyError):
+            a.add(x, 1)
+
+    with world.test.empty():
+        world.provider(A)
+
+        @world.provider
+        class B(Provider[Hashable]):
+            def __init__(self):
+                super().__init__()
+                self.registered = dict()
+
+            def exists(self, dependency: Hashable) -> bool:
+                return dependency in self.registered
+
+            def provide(self,
+                        dependency: Hashable,
+                        container: Container) -> DependencyValue:
+                return DependencyValue(self.registered[dependency])
+
+            def add(self, dependency: Hashable, value: object):
+                self._assert_not_duplicate(dependency)
+                self.registered[dependency] = value
+
+        world.get[A]().add(x, 1)
+
+        with pytest.raises(DuplicateDependencyError):
+            world.get[B]().add(x, 1)

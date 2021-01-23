@@ -8,7 +8,7 @@ from ._internal.utils import AbstractMeta, FinalImmutable
 from ._providers import FactoryProvider, TagProvider
 from ._providers.factory import FactoryDependency
 from ._providers.service import Build
-from .core import Dependency, inject
+from .core import Dependency, inject, Provide
 from .service import service
 
 _ABSTRACT_FLAG = '__antidote_abstract'
@@ -65,8 +65,8 @@ class FactoryMeta(AbstractMeta):
 @API.private
 @inject
 def _configure_factory(cls: FactoryMeta,
-                       factory_provider: FactoryProvider = None,
-                       tag_provider: TagProvider = None) -> FactoryDependency:
+                       factory_provider: Provide[FactoryProvider] = None,
+                       tag_provider: Provide[TagProvider] = None) -> FactoryDependency:
     from .factory import Factory
     assert factory_provider is not None
 

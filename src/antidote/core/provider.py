@@ -283,7 +283,6 @@ class StatelessProvider(Provider[T], abstract=True):
         ...         return DependencyValue(dependency ** 2, scope=Scope.singleton())
         >>> world.get(9)
         81
-
     """
 
     @final

@@ -1,6 +1,7 @@
 import pytest
 
-from antidote import factory, implementation, Service, world
+from antidote import Provide, Service, factory, implementation, inject, world
+from antidote._implementation import validate_provided_class
 from antidote._providers import (FactoryProvider, IndirectProvider,
                                  ServiceProvider)
 from antidote.exceptions import DependencyInstantiationError
@@ -126,10 +127,10 @@ def dummy_choose():
                                           dummy_choose,
                                           id=arg)
                              for arg in ['permanent',
-                                         'auto_wire',
+                                         'auto_provide',
                                          'dependencies',
                                          'use_names',
-                                         'use_type_hints']
+                                         'auto_provide']
                          ])
 def test_invalid_implementation(expectation, kwargs: dict, func):
     with expectation:
@@ -227,3 +228,114 @@ def test_getattr():
 
     build.new_hello = 'new_world'
     assert build.new_hello == 'new_world'
+
+
+def test_validate_provided_class():
+    class Interface:
+        pass
+
+    with pytest.raises(TypeError):
+        validate_provided_class(object(), expected=Interface)
+
+    class A(Interface, Service):
+        pass
+
+    class B(Service):
+        pass
+
+    validate_provided_class(A, expected=Interface)
+    validate_provided_class(B, expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B, expected=Interface)
+
+    validate_provided_class(A.with_kwargs(a=1), expected=Interface)
+    validate_provided_class(B.with_kwargs(a=1), expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B.with_kwargs(a=1), expected=Interface)
+
+    @implementation(Interface)
+    def choose_a():
+        return A
+
+    @implementation(B)
+    def choose_b():
+        return B
+
+    validate_provided_class(Interface @ choose_a, expected=Interface)
+    validate_provided_class(B @ choose_b, expected=B)
+    with pytest.raises(TypeError):
+        validate_provided_class(B @ choose_b, expected=Interface)
+
+
+def test_validate_provided_class_factory():
+    class Interface:
+        pass
+
+    class A(Interface):
+        pass
+
+    class B:
+        pass
+
+    with world.test.new():
+        @factory
+        def build_a() -> A:
+            return A()
+
+        @factory
+        def build_b() -> B:
+            return B()
+
+        validate_provided_class(A @ build_a, expected=Interface)
+        validate_provided_class(B @ build_b, expected=B)
+        with pytest.raises(TypeError):
+            validate_provided_class(B @ build_b, expected=Interface)
+
+        validate_provided_class(A @ build_a.with_kwargs(a=1), expected=Interface)
+        validate_provided_class(B @ build_b.with_kwargs(a=1), expected=B)
+        with pytest.raises(TypeError):
+            validate_provided_class(B @ build_b.with_kwargs(a=1), expected=Interface)
+
+
+def test_default_injection():
+    class MyService(Service):
+        pass
+
+    class Interface:
+        pass
+
+    class A(Interface, Service):
+        pass
+
+    injected = None
+
+    @implementation(Interface)
+    def choose_a(s: Provide[MyService]):
+        nonlocal injected
+        injected = s
+        return A
+
+    assert world.get(Interface @ choose_a) is world.get(A)
+    assert injected is world.get(MyService)
+
+
+def test_double_injection():
+    world.singletons.add('s', object())
+
+    class Interface:
+        pass
+
+    class A(Interface, Service):
+        pass
+
+    injected = None
+
+    @implementation(Interface)
+    @inject(use_names=True)
+    def choose_a(s):
+        nonlocal injected
+        injected = s
+        return A
+
+    assert world.get(Interface @ choose_a) is world.get(A)
+    assert injected is world.get('s')

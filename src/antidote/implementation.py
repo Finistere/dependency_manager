@@ -3,11 +3,12 @@ import inspect
 from typing import Callable, TypeVar, cast
 
 from ._compatibility.typing import Protocol
-from ._implementation import ImplementationWrapper
+from ._implementation import ImplementationWrapper, validate_provided_class
 from ._internal import API
+from ._internal.wrapper import is_wrapper
 from ._providers import IndirectProvider
-from .core import inject
-from .utils import validate_provided_class
+from .core import inject, Provide
+from .core.exceptions import DoubleInjectionError
 
 F = TypeVar('F', bound=Callable[[], object])
 
@@ -40,7 +41,8 @@ def implementation(interface: type,
 
     .. doctest:: helpers_implementation
 
-        >>> from antidote import implementation, Service, factory, world
+        >>> from antidote import implementation, Service, factory, world, Get
+        >>> from typing_extensions import Annotated
         >>> class Database:
         ...     pass
         >>> class PostgreSQL(Database, Service):
@@ -50,8 +52,8 @@ def implementation(interface: type,
         >>> @factory
         ... def build_mysql() -> MySQL:
         ...     return MySQL()
-        >>> @implementation(Database, dependencies=['choice'])
-        ... def local_db(choice: str):
+        >>> @implementation(Database)
+        ... def local_db(choice: Annotated[str, Get('choice')]):
         ...     if choice == 'a':
         ...         return PostgreSQL  # One could also use PostgreSQL.with_kwargs(...)
         ...     else:
@@ -80,23 +82,28 @@ def implementation(interface: type,
 
     @inject
     def register(func: F,
-                 indirect_provider: IndirectProvider = None
+                 indirect_provider: Provide[IndirectProvider] = None
                  ) -> ImplementationProtocol[F]:
         assert indirect_provider is not None
 
-        if inspect.isfunction(func):
+        if not (inspect.isfunction(func)
+                or (is_wrapper(func)
+                    and inspect.isfunction(func.__wrapped__))):  # type: ignore
+            raise TypeError(f"{func} is not a function")
 
-            @functools.wraps(func)
-            def impl() -> object:
-                dep = func()
-                validate_provided_class(dep, expected=interface)
-                return dep
+        try:
+            func = inject(func)
+        except DoubleInjectionError:
+            pass
 
-            dependency = indirect_provider.register_implementation(interface, impl,
-                                                                   permanent=permanent)
-        else:
-            raise TypeError(f"implementation must be applied on a function, "
-                            f"not a {type(func)}")
+        @functools.wraps(func)
+        def impl() -> object:
+            dep = func()
+            validate_provided_class(dep, expected=interface)
+            return dep
+
+        dependency = indirect_provider.register_implementation(interface, impl,
+                                                               permanent=permanent)
         return cast(ImplementationProtocol[F], ImplementationWrapper(func, dependency))
 
     return register

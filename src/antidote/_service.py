@@ -4,7 +4,7 @@ from ._internal import API
 from ._internal.utils import AbstractMeta
 from ._providers import ServiceProvider, TagProvider
 from ._providers.service import Build
-from .core import inject
+from .core import inject, Provide
 
 _ABSTRACT_FLAG = '__antidote_abstract'
 
@@ -44,8 +44,8 @@ class ServiceMeta(AbstractMeta):
 @API.private
 @inject
 def _configure_service(cls: type,
-                       service_provider: ServiceProvider = None,
-                       tag_provider: TagProvider = None,
+                       service_provider: Provide[ServiceProvider] = None,
+                       tag_provider: Provide[TagProvider] = None,
                        conf: object = None) -> None:
     from .service import Service
     assert service_provider is not None

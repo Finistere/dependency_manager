@@ -19,7 +19,8 @@ as a service or one that can be provided by a factory.
 
 .. testcode:: recipes_interface_implementation
 
-    from antidote import implementation, Service, inject
+    from antidote import implementation, Service, inject, Get
+    from typing_extensions import Annotated
 
     class Database:
         def __init__(self, host: str, name: str):
@@ -34,8 +35,8 @@ as a service or one that can be provided by a factory.
 
     # permanent is True by default. If you want to choose each time which implementation
     # should be used, set it to False.
-    @implementation(Database, permanent=True, dependencies=['db_conn_str'])
-    def local_db(conn_str):
+    @implementation(Database, permanent=True)
+    def local_db(conn_str: Annotated[str, Get('db_conn_str')]):
         db, host, name = conn_str.split(':')
         if db == 'postgres':
             # Complex dependencies are supported
