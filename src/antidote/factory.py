@@ -23,9 +23,6 @@ class FactoryProtocol(Protocol[F]):
     def __rmatmul__(self, klass: type) -> object:
         pass  # pragma: no cover
 
-    def with_kwargs(self, **kwargs: object) -> PreBuild:
-        pass  # pragma: no cover
-
     __call__: F
 
 
@@ -88,18 +85,23 @@ class Factory(metaclass=FactoryMeta, abstract=True):
         >>> class MyFactory(Factory):
         ...     def __call__(self, name = 'default') -> ExternalService:
         ...         return ExternalService(name)
+        ...
+        ...     @classmethod
+        ...     def named(cls, name: str):
+        ...         return cls._with_kwargs(name=name)
+        ...
         >>> world.get[ExternalService](ExternalService @ MyFactory).name
         'default'
         >>> s = world.get[ExternalService](
-        ...     ExternalService @ MyFactory.with_kwargs(name='perfection'))
+        ...     ExternalService @ MyFactory.named('perfection'))
         >>> s.name
         'perfection'
         >>> # The same instance will be returned for those keywords as MyFactory was
         ... # declared as returning a singleton.
-        ... s is world.get(ExternalService @ MyFactory.with_kwargs(name='perfection'))
+        ... s is world.get(ExternalService @ MyFactory.named('perfection'))
         True
         >>> # You can also keep the dependency and re-use it
-        ... PerfectionService = ExternalService @ MyFactory.with_kwargs(name='perfection')
+        ... PerfectionService = ExternalService @ MyFactory.named('perfection')
         >>> @inject(dependencies=dict(service=PerfectionService))
         ... def f(service):
         ...     return service
@@ -236,37 +238,6 @@ def factory(f: F = None,
         ...     return ExternalService()
         >>> world.get[ExternalService](ExternalService @ build_service)
         <ExternalService ...>
-
-    One can customize the instantiation and use the same service with different
-    configuration:
-
-    .. doctest:: helpers_factory_v2
-
-        >>> from antidote import factory, world, inject
-        >>> class ExternalService:
-        ...     def __init__(self, name):
-        ...         self.name = name
-        >>> @factory
-        ... def build_service(name = 'default') -> ExternalService:
-        ...     return ExternalService(name)
-        >>> world.get[ExternalService](ExternalService @ build_service).name
-        'default'
-        >>> s = world.get[ExternalService](
-        ...     ExternalService @ build_service.with_kwargs(name='perfection'))
-        >>> s.name
-        'perfection'
-        >>> # The same instance will be returned for those keywords as MyFactory was
-        ... # declared as returning a singleton.
-        ... s is world.get(ExternalService @ build_service.with_kwargs(name='perfection'))
-        True
-        >>> # You can also keep the dependency and re-use it
-        ... PerfectionService = \\
-        ...     ExternalService @ build_service.with_kwargs(name='perfection')
-        >>> @inject(dependencies=dict(service=PerfectionService))
-        ... def f(service):
-        ...     return service
-        >>> f() is s
-        True
 
     Args:
         f: Callable which builds the dependency.

@@ -1,4 +1,5 @@
 import collections.abc as c_abc
+import inspect
 from typing import (Any, Callable, Hashable, Iterable, Mapping, Optional, Sequence,
                     TypeVar, Union, overload)
 
@@ -203,15 +204,26 @@ def validate_injection(dependencies: DEPENDENCIES_TYPE = None,
         if not all(isinstance(k, str) for k in dependencies.keys()):
             raise TypeError("Dependencies keys must be argument names (str)")
 
-    if not (use_names is None or isinstance(use_names, (bool, c_abc.Iterable))):
+    if isinstance(use_names, str) \
+            or not (use_names is None or isinstance(use_names, (bool, c_abc.Iterable))):
         raise TypeError(
             f"use_names must be either a boolean or a whitelist of argument names, "
             f"not {type(use_names)!r}.")
-    if isinstance(use_names, c_abc.Iterable):
+
+    # If we can iterate over it safely
+    if isinstance(use_names, (list, set, tuple)):
         if not all(isinstance(arg_name, str) for arg_name in use_names):
             raise TypeError("use_names must be list of argument names (str) or a boolean")
 
-    if not (auto_provide is None or isinstance(auto_provide, (bool, c_abc.Iterable))):
+    if isinstance(auto_provide, str) \
+            or not (auto_provide is None or isinstance(auto_provide, (bool, c_abc.Iterable))):
         raise TypeError(
-            f"auto_provide must be either a boolean or a whitelist of dependencies, "
+            f"auto_provide must be either a boolean or an iterable of classes, "
             f"not {type(auto_provide)!r}.")
+
+    # If we can iterate over it safely
+    if isinstance(auto_provide, (list, set, tuple)):
+        for cls in auto_provide:
+            if not isinstance(cls, type) and inspect.isclass(cls):
+                raise TypeError(f"auto_provide must be a boolean or an iterable of "
+                                f"classes, but contains {cls!r} which is not a class.")

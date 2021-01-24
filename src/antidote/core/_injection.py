@@ -26,19 +26,18 @@ def raw_inject(f: AnyF,
         raise TypeError(f"strict_validation must be a boolean, "
                         f"not {type(strict_validation)}")
     if inspect.isclass(f):
-        # @inject on a class would not return a class which is
-        # counter-intuitive.
+        # User-friendlier error for classes.
         raise TypeError("Classes cannot be wrapped with @inject. "
                         "Consider using @wire")
-    if not (callable(f) or isinstance(f, (classmethod, staticmethod))):
-        raise TypeError(f"wrapped object {f} is neither a callable "
-                        f"nor a class/static method")
 
     real_f = f.__func__ if isinstance(f, (classmethod, staticmethod)) else f
     if is_wrapper(f):
         raise DoubleInjectionError(get_wrapped(f))
     if is_wrapper(real_f):
         raise DoubleInjectionError(get_wrapped(real_f))
+    if not inspect.isfunction(real_f):
+        raise TypeError(f"wrapped object {f} is neither a function "
+                        f"nor a (class/static) method")
 
     blueprint = _build_injection_blueprint(
         arguments=Arguments.from_callable(f),
@@ -165,9 +164,13 @@ def _build_auto_provide(arguments: Arguments,
     elif isinstance(auto_provide, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
         auto_provide = set(auto_provide)
+        for cls in auto_provide:
+            if not isinstance(cls, type) and inspect.isclass(cls):
+                raise TypeError(f"auto_provide must be a boolean or an iterable of "
+                                f"classes, but contains {cls!r} which is not a class.")
     else:
-        raise TypeError(f"Only an iterable or a boolean is supported for "
-                        f"auto_provide, not {type(auto_provide)!r}")
+        raise TypeError(f"auto_provide must be a boolean or an iterable of classes,"
+                        f"not {type(auto_provide)}.")
 
     auto_provided = {}
     for arg in arguments.without_self:

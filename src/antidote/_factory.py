@@ -46,7 +46,7 @@ class FactoryMeta(AbstractMeta):
         return cls.__factory_dependency
 
     @API.public
-    def with_kwargs(cls, **kwargs: object) -> 'PreBuild':
+    def _with_kwargs(cls, **kwargs: object) -> 'PreBuild':
         """
         Creates a new dependency based on the factory which will have the keyword
         arguments provided. If the factory provides a singleton and identical kwargs are
@@ -117,9 +117,6 @@ class FactoryWrapper:
         if left_operand is not self.__factory_dependency.output:
             raise ValueError(f"Unsupported output {left_operand}")
         return self.__factory_dependency
-
-    def with_kwargs(self, **kwargs: object) -> 'PreBuild':
-        return PreBuild(self.__factory_dependency, kwargs)
 
     def __getattr__(self, item: str) -> object:
         return getattr(self.__wrapped__, item)

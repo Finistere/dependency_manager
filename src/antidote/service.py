@@ -46,15 +46,15 @@ class Service(metaclass=ServiceMeta, abstract=True):
         ...         self.name = name
         >>> world.get[MyService]().name
         'default'
-        >>> s = world.get[MyService](MyService.with_kwargs(name='perfection'))
+        >>> s = world.get[MyService](MyService._with_kwargs(name='perfection'))
         >>> s.name
         'perfection'
         >>> # The same instance will be returned for those keywords as MyService is
         ... # defined as a singleton.
-        ... s is world.get(MyService.with_kwargs(name='perfection'))
+        ... s is world.get(MyService._with_kwargs(name='perfection'))
         True
         >>> # You can also keep the dependency and re-use it
-        ... PerfectionService = MyService.with_kwargs(name='perfection')
+        ... PerfectionService = MyService._with_kwargs(name='perfection')
         >>> @inject(dependencies=dict(service=PerfectionService))
         ... def f(service):
         ...     return service

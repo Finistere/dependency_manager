@@ -111,8 +111,11 @@ To install Antidote, simply run this command:
     pip install antidote
 
 
-Quick Start
-===========
+Hands-on quick Start
+====================
+
+Short and concise example of some of the most important features of Antidote. The docuemYou can find
+a very beginner friendly tutorial
 
 How does injection looks like ? Here is a simple example:
 

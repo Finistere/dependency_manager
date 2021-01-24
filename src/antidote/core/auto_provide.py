@@ -1,28 +1,47 @@
 import inspect
-from typing import (Any, Callable, TypeVar, overload)
+from typing import (Any, Callable, Iterable, TypeVar, Union, overload)
 
-from .injection import inject
+from .injection import DEPENDENCIES_TYPE, inject
 from .wiring import wire
 from .._internal import API
 
 F = TypeVar('F', bound=Callable[..., Any])
+AnyF = Union[Callable[..., Any], staticmethod, classmethod]
 
 
 @overload
-def auto_provide(__obj: staticmethod  # noqa: E704  # pragma: no cover
+def auto_provide(__func: staticmethod,  # noqa: E704  # pragma: no cover
+                 *,
+                 dependencies: DEPENDENCIES_TYPE = None,
+                 use_names: Union[bool, Iterable[str]] = None
                  ) -> staticmethod: ...
 
 
 @overload
-def auto_provide(__obj: classmethod) -> classmethod: ...  # noqa: E704  # pragma: no cover
+def auto_provide(__func: classmethod,  # noqa: E704  # pragma: no cover
+                 *,
+                 dependencies: DEPENDENCIES_TYPE = None,
+                 use_names: Union[bool, Iterable[str]] = None) -> classmethod: ...
 
 
 @overload
-def auto_provide(__obj: F) -> F: ...  # noqa: E704  # pragma: no cover
+def auto_provide(__func: F,  # noqa: E704  # pragma: no cover
+                 *,
+                 dependencies: DEPENDENCIES_TYPE = None,
+                 use_names: Union[bool, Iterable[str]] = None) -> F: ...
+
+
+@overload
+def auto_provide(*,  # noqa: E704  # pragma: no cover
+                 dependencies: DEPENDENCIES_TYPE = None,
+                 use_names: Union[bool, Iterable[str]] = None) -> Callable[[F], F]: ...
 
 
 @API.public
-def auto_provide(__obj: Any = None) -> Any:
+def auto_provide(__func: AnyF = None,
+                 *,
+                 dependencies: DEPENDENCIES_TYPE = None,
+                 use_names: Union[bool, Iterable[str]] = None) -> AnyF:
     """
     Wrapper of :py:func:`.inject` with :code:`auto_provide=True` by default. Meaning
     that it'll try to inject dependencies based on the type hints contrary to
@@ -31,7 +50,7 @@ def auto_provide(__obj: Any = None) -> Any:
 
     .. doctest:: core_inject
 
-        >>> from antidote import world, Service
+        >>> from antidote import world, Service, auto_provide
         >>> class MyService(Service):
         ...     pass
         >>> @auto_provide
@@ -64,10 +83,12 @@ def auto_provide(__obj: Any = None) -> Any:
         argument :code:`func` was supplied.
     """
 
-    if isinstance(__obj, type) and inspect.isclass(__obj):
-        return wire(__obj, auto_provide=True)
-    elif callable(__obj) or isinstance(__obj, (classmethod, staticmethod)):
-        return inject(__obj, auto_provide=True)
-
-    raise TypeError(f"Only classes, methods and functions can be wired, "
-                    f"not {type(__obj)}")
+    if __func is None:  # For Mypy
+        return inject(auto_provide=True,
+                      dependencies=dependencies,
+                      use_names=use_names)
+    else:
+        return inject(__func,
+                      auto_provide=True,
+                      dependencies=dependencies,
+                      use_names=use_names)

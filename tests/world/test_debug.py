@@ -486,7 +486,7 @@ def test_complex_debug():
         def f(s: Provide[Service4]):
             pass
 
-        @inject(dependencies=[Service1.with_kwargs(test=1),
+        @inject(dependencies=[Service1._with_kwargs(test=1),
                               Service2 @ build_s2.with_kwargs(option=2)])
         def f_with_options(a, b):
             pass

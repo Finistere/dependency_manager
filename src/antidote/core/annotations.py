@@ -1,4 +1,4 @@
-from typing import Callable, Hashable, Optional, TypeVar
+from typing import Callable, Dict, Hashable, Optional, TypeVar
 
 from .injection import Arg
 from .._compatibility.typing import Annotated, Protocol
@@ -37,7 +37,7 @@ class Get(FinalImmutable, AntidoteAnnotation):
         >>> world.get[Database]().host == world.get("db_host")
         True
         >>> DifferentDatabase = Annotated[Database,
-        ...                               Get(Database.with_kwargs(host='different'))]
+        ...                               Get(Database._with_kwargs(host='different'))]
         >>> @inject
         ... def load_db(db: DifferentDatabase):
         ...     return db
@@ -48,7 +48,7 @@ class Get(FinalImmutable, AntidoteAnnotation):
         'different'
         >>> # But aren't necessary. However, it's more convenient if you use them
         ... # already as type hints.
-        ... world.get[Database](Database.with_kwargs(host='different')).host
+        ... world.get[Database](Database._with_kwargs(host='different')).host
         'different'
 
     """
@@ -82,13 +82,13 @@ class From(FinalImmutable, AntidoteAnnotation):
         >>> f().host
         'localhost:6789'
         >>> DifferentDatabase = Annotated[Database,
-        ...                               From(build_db.with_kwargs(host='different'))]
+        ...                               From(build_db._with_kwargs(host='different'))]
         >>> # Annotations are also supported in world.get()
         ... world.get[Database](DifferentDatabase).host
         'different'
         >>> # But aren't necessary. However, it's more convenient if you use them
         ... # already as type hints.
-        ... world.get[Database](Database @ build_db.with_kwargs(host='different')).host
+        ... world.get[Database](Database @ build_db._with_kwargs(host='different')).host
         'different'
 
     """
@@ -171,23 +171,20 @@ INJECT_SENTINEL = AntidoteAnnotation()
 # API.public
 Provide = Annotated[T, INJECT_SENTINEL]
 Provide.__doc__ = """
-Type hint will be used as the dependency.
+Annotation specifying that the type hint itself is the dependency:
 
-.. doctest:: core_annotation_ignore
+.. doctest:: core_annotation_provide
 
-    >>> from antidote import Service, world, inject, Provide, Get
-    >>> from typing_extensions import Annotated
+    >>> from antidote import Service, world, inject, Provide
+    >>> from typing_extensions import Annotated  # Or from typing if Python 3.9+
     >>> class Database(Service):
     ...     pass
     >>> @inject
-    ... def load_db(db: Provide[Database] = None):
+    ... def load_db(db: Provide[Database]):
     ...     return db
     >>> load_db()
     <Database ...>
-    >>> # Equivalent to
-    ... @inject
-    ... def load_db(db: Annotated[Database, Get(Database)] = None):
-    ...     return db
+
 """
 
 # API.public

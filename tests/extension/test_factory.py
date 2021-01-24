@@ -96,11 +96,11 @@ def test_custom_scope():
 
 def test_with_kwargs(build: Type[Factory]):
     x = object()
-    a = world.get(A @ build.with_kwargs(x=x))
+    a = world.get(A @ build._with_kwargs(x=x))
     assert a.kwargs == dict(x=x)
 
     with pytest.raises(ValueError, match=".*with_kwargs.*"):
-        A @ build.with_kwargs()
+        A @ build._with_kwargs()
 
 
 def test_getattr():
@@ -121,7 +121,7 @@ def test_invalid_dependency(build: Type[Factory]):
         B @ build
 
     with pytest.raises(ValueError, match="Unsupported output.*"):
-        B @ build.with_kwargs(x=1)
+        B @ build._with_kwargs(x=1)
 
 
 def test_missing_call():

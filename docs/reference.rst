@@ -18,6 +18,9 @@ world
 
     .. autodata:: lazy
 
+.. automodule:: antidote.utils
+    :members: is_compiled
+
 
 world.scopes
 ------------
@@ -61,7 +64,7 @@ Service
     :members: __antidote__
     :inherited-members:
 
-    .. automethod:: with_kwargs
+    .. automethod:: _with_kwargs
 
 
 Factory
@@ -74,7 +77,7 @@ Factory
     :members:
     :inherited-members:
 
-    .. automethod:: with_kwargs
+    .. automethod:: _with_kwargs
 
 
 Constants
@@ -117,6 +120,11 @@ Inject
 ^^^^^^
 .. automodule:: antidote.core.injection
     :members: inject, Arg
+
+Auto_provide
+^^^^^^^^^^^^
+.. automodule:: antidote.core.auto_provide
+    :members:
 
 Annotations
 ^^^^^^^^^^^

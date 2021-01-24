@@ -77,7 +77,7 @@ def test_implementation_with_service():
 
     @implementation(Interface)
     def impl():
-        return A.with_kwargs(test=x)
+        return A._with_kwargs(test=x)
 
     a = world.get(Interface @ impl)
     assert isinstance(a, A)
@@ -172,9 +172,9 @@ def test_invalid_implementation_return_type():
 
         @implementation(Interface)
         def impl():
-            return C.with_kwargs(test=1)
+            return C._with_kwargs(test=1)
 
-        world.get(C.with_kwargs(test=1))
+        world.get(C._with_kwargs(test=1))
         with pytest.raises(DependencyInstantiationError):
             world.get(Interface @ impl)
 
@@ -248,10 +248,10 @@ def test_validate_provided_class():
     with pytest.raises(TypeError):
         validate_provided_class(B, expected=Interface)
 
-    validate_provided_class(A.with_kwargs(a=1), expected=Interface)
-    validate_provided_class(B.with_kwargs(a=1), expected=B)
+    validate_provided_class(A._with_kwargs(a=1), expected=Interface)
+    validate_provided_class(B._with_kwargs(a=1), expected=B)
     with pytest.raises(TypeError):
-        validate_provided_class(B.with_kwargs(a=1), expected=Interface)
+        validate_provided_class(B._with_kwargs(a=1), expected=Interface)
 
     @implementation(Interface)
     def choose_a():

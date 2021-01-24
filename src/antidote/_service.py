@@ -26,7 +26,7 @@ class ServiceMeta(AbstractMeta):
         return cls
 
     @API.public
-    def with_kwargs(cls, **kwargs: object) -> object:
+    def _with_kwargs(cls, **kwargs: object) -> object:
         """
         Creates a new dependency based on the service which will have the keyword
         arguments provided. If the service is a singleton and identical kwargs are used,
@@ -36,7 +36,7 @@ class ServiceMeta(AbstractMeta):
             **kwargs: Arguments passed on to :code:`__init__()`.
 
         Returns:
-            Dependency to be retrieved from Antidote.
+            Dependency to be retrieved from Antidote. You cannot use it directly.
         """
         return Build(cls, kwargs)
 

@@ -62,7 +62,7 @@ def test_readme_simple():
     # specify them in the dependency itself. As Database returns, by default,
     # a singleton this will also be the case here. Using the same host, will
     # return the same instance.
-    world.get[Database](Database.with_kwargs(host='XX'))
+    world.get[Database](Database._with_kwargs(host='XX'))
 
 
 def test_readme():
