@@ -672,7 +672,7 @@ it's stored as an string ! So what's the actual value ?
 
 This is one of the few cases where Antidote does use magic: :py:class:`.Constants` will,
 by default, automatically cast integers, floats and strings. You can control that behavior
-with :py:class:`.Constants.Conf.auto_cast`.
+with :py:class:`.Constants.Conf.auto_cast`. Additional examples can be found in :doc:`./recipes`
 
 
 
@@ -680,12 +680,17 @@ with :py:class:`.Constants.Conf.auto_cast`.
 ====================================
 
 
-Factories can be used for a lot more, but they're the best way to handle external
-dependencies which you don't own, like library classes.
+Factories are ideal to deal with external dependencies which you don't own,
+like library classes. The simplest way to declare a factory, is simply to use the function
+decorator :py:func:`.factory.factory`:
 
 .. testcode:: tutorial_factory
 
-    from antidote import factory, inject
+    from typing_extensions import Annotated
+    # Or for Python 3.9+
+    # from typing import Annotated
+
+    from antidote import factory, inject, ProvideArgName, From
 
     # Suppose we don't own the class code, hence we can't define it as a Service
     class Database:
@@ -694,8 +699,17 @@ dependencies which you don't own, like library classes.
 
 
     @factory
+    def default_db(url: ProvideArgName[str]) -> Database:
+        return Database(url)
+
+    @inject
+    def f(db: Annotated[Database, From(default_db)]) -> Database:
+        return db
+
+    # Or without annotated type hints
+    @factory
     @inject(use_names=True)
-    def default_db(url: str) -> Database:  # return type MUST be specified
+    def default_db(url: str) -> Database:
         return Database(url)
 
     @inject(dependencies=[Database @ default_db])
@@ -713,38 +727,46 @@ dependencies which you don't own, like library classes.
 
 
 The return type MUST always be specified, this is how Antidote knows which dependency you
-intend to provide. You're probably wondering about the custom syntax of
-:code:`Database @ default_db`, no ? It provides some very nice properties
+intend to provide. :py:func:`.factory.factory` will apply :py:func:`.inject` on the function if not
+done already. Hence you can use annotated type hints out of the box but no more without
+injecting explicitly. You're probably wondering about the custom syntax when not using
+annotated type hints :code:`Database @ default_db`. It provides some very nice properties
 
 - You can trace back how :code:`Database` is instantiated.
 - The factory :code:`default_db` will always be loaded by Python before using
   :code:`Database`.
 
-If you need more complex factories, you can use a class instead:
+If you need more complex factories, you can use a class instead by inheriting :py:class:`.Factory`:
 
 .. testcode:: tutorial_factory_v2
 
-    from antidote import Factory
+    from typing_extensions import Annotated
+    # Or for Python 3.9+
+    # from typing import Annotated
+
+    from antidote import Factory, ProvideArgName
 
     class Database:
         def __init__(self, url: str):
             self.url = url
 
     class DefaultDB(Factory):
-        # Both __init__() and __call__() are auto-wired by default.
-        __antidote__ = Factory.Conf().with_wiring(use_names=True)
-
-        def __init__(self, url: str):
+        def __init__(self, url: ProvideArgName[str]):
             self.url = url
 
         # Will be called to instantiate Database
         def __call__(self) -> Database:
             return Database(url)
 
+:py:class:`.Factory` has more or less the same configuration parameters than :py:class:`.Service`:
+
+- :py:class:`.Factory.Conf` like :py:class:`.Service.Conf`
+- :py:class:`.Factory._with_kwargs` like :py:class:`.Service._with_kwargs`
 
 
-6. Test & Debug
-===============
+
+6. Tests
+========
 
 
 You've seen until now that Antidote's :py:func:`.inject` does not force you to rely on
@@ -758,8 +780,8 @@ the injection to be used:
         pass
 
     @inject
-    def f(my_service: Provide[MyService]):
-        pass
+    def f(my_service: Provide[MyService]) -> MyService:
+        return my_service
 
     # injection
     f()
@@ -768,82 +790,172 @@ the injection to be used:
     f(MyService())
     f(my_service=MyService())
 
-But Antidote provides more than that to let you test more easily your code. Each time
-an injection must be done, :py:func:`.inject` will retrieve :py:mod:`.world` where every
-dependency has been defined and retrieve whatever necessary. This global state can be
-controlled in your tests through :py:mod:`.world.test`:
+This allows to test easily individual components in unit-tests easily. But that's not always
+enough in more complex tests or integration tests. Don't worry, Antidote got you covered !
+In the first section Antidote was roughly described as working as follows::
 
-.. doctest:: tutorial_test_debug
+                 +-----------+
+          +----->|   world   +------+
+          |      +-----------+      |
+
+     declaration                 @inject
+
+          |                         |
+          |                         v
+    +-----+------+             +----------+
+    | Dependency |             | Function |
+    +------------+             +----------+
+
+But that's not really what is happening, in reality we have::
+
+                 +-----------+
+                 |   world   |
+                 +-----+-----+
+                       |
+                       +
+                    controls
+                       +
+                       |
+                       v
+                +------+------+
+          +---->+  container  +-----+
+          |     +-------------+     |
+          +                         +
+     declaration                 @inject
+          +                         +
+          |                         |
+    +-----+------+                  v
+    | Dependency |             +----+-----+
+    +------------+             | Function |
+                               +----------+
+
+
+The container handles all of the state of Antidote such as singletons. The good news is
+that :py:mod:`.world` does provide to you the tools to control it in :py:mod:`.world.test`.
+Allowing you to override dependencies or test in isolated environments. The most important
+one is :py:func:`.world.test.clone`. It'll keep all of your dependency declaration and
+isolate you from the outside world:
+
+.. doctest:: tutorial_test
 
     >>> from antidote import world
-    >>> # Creating an new world, previously declared dependencies are not present anymore
-    ... with world.test.new():
-    ...     f()
+    >>> with world.test.clone():
+    ...     # This works as expected !
+    ...     my_service = f()
+    >>> # but it's isolated from the rest
+    ... my_service is world.get(MyService)
+    False
+
+
+It'll also apply :py:func:`.world.freeze` the local world, meaning that no new dependencies
+cannot be added. It ensures that you cannot change the wiring of your dependencies which you
+intend to test.
+
+.. doctest:: tutorial_test
+
+    >>> with world.test.clone():
+    ...     world.singletons.add('test', 1)
     Traceback (most recent call last):
       File "<stdin>", line 1, in ?
-    DependencyNotFoundError
-
-:py:func:`.world.test.new` will create a new world in which you can test anything you'd
-like without impacting the rest. Typically this lets you test things in isolation:
-
-.. doctest:: tutorial_test_debug
-
-    >>> with world.test.new():
-    ...     class TestOnlyService(Service):
-    ...         pass
-    ...     assert isinstance(world.get[TestOnlyService](), TestOnlyService)
-    >>> # Once outside of this test world, TestOnlyService won't exist as a service:
-    ... world.get[TestOnlyService]()
-    Traceback (most recent call last):
-      File "<stdin>", line 1, in ?
-    DependencyNotFoundError
-
-But what if you actually need :code:`MyService` ? Re-declaring it each time would be
-cumbersome at best ! In this case you should use :py:func:`.world.test.clone`. It'll
-clone the current world and won't propagate back any changes:
-
-.. doctest:: tutorial_test_debug
-
-    >>> with world.test.clone():
-    ...     # this works !
-    ...     f()
-
-:py:func:`~.world.test.clone` will have the same dependencies, except for singletons. By
-default they are NOT kept, but you can change that behavior:
-
-.. doctest:: tutorial_test_debug
-
-    >>> my_service = world.get[MyService]()  # Getting the real service instance
-    >>> with world.test.clone():
-    ...     # As existing singletons are NOT propagated to the test world, hence
-    ...     # when requesting MyService, Antidote needs to create a new instance.
-    ...     assert world.get[MyService]() is not my_service
-    >>> # But if you prefer you can keep existing singletons:
-    ... with world.test.clone(keep_singletons=True):
-    ...     assert world.get[MyService]() is my_service
-    >>> # Be careful with it ! any changes on the singletons themselves WILL be propagated
-    ... # back
-    ... world.singletons.add("languages", ["en"])
-    >>> with world.test.clone(keep_singletons=True):
-    ...     world.get[list]("languages").append("fr")
-    >>> world.get("languages")
-    ['en', 'fr']
-
-
-While Antidote does not support overriding dependencies, you may do it in tests:
-
-.. doctest:: tutorial_test_debug
-
-    >>> with world.test.clone():
-    ...     # This fails because new dependencies cannot be defined inside clone()
-    ...     world.singletons.add("test", 1)
-    Traceback (most recent call last):
-    ...
     FrozenWorldError
-    >>> with world.test.clone():
-    ...     test_service = MyService()
-    ...     world.test.override.singleton(MyService, test_service)
-    ...     assert world.get[MyService]() is test_service
 
+
+Doesn't sound very helpful by itself, but you can use :py:mod:`.world.test.override` to
+override any dependency in it:
+
+.. doctest:: tutorial_test
+
+    >>> with world.test.clone():
+    ...     world.test.override.singleton(MyService, 'dummy')
+    ...     f()
+    dummy
+
+:py:mod:`.world.test.override` exposes three ways to override dependencies:
+
+-   :py:func:`~.world.test.override.singleton`
+
+    .. doctest:: tutorial_test
+
+        >>> # Use either world.test.override or override directly
+        ... from antidote.world.test import override
+        >>> with world.test.clone():
+        ...     override.singleton(MyService, 'dummy')
+        ...     # Can be redefined
+        ...     override.singleton(MyService, 'dummy')
+        ...     # Multiple dependencies can be declared with a dict
+        ...     override.singleton({MyService: 'dummy'})
+        ...     f()
+        dummy
+
+-   :py:func:`~.world.test.override.factory`
+
+    .. doctest:: tutorial_test
+
+        >>> with world.test.clone():
+        ...     @override.factory()
+        ...     def override_my_service() -> MyService:
+        ...         return 'dummy'
+        ...     # Can be redefined and will remove any existing instance
+        ...     # (if singleton for example)
+        ...     @override.factory()
+        ...     def override_my_service() -> MyService:
+        ...         return 'dummy'
+        ...     f()
+        dummy
+
+-   :py:func:`~.world.test.override.provider`
+
+    .. doctest:: tutorial_test
+
+        >>> from antidote.core import DependencyValue
+        >>> with world.test.clone():
+        ...     @override.provider()
+        ...     def dummy_provider(dependency):
+        ...         if dependency is MyService:
+        ...             return DependencyValue('dummy')
+        ...     f()
+        dummy
+
+    The decorated function will be called each time a dependency is needed. If it can be
+    provided it should be returned wrapped by a :py:class:`~.core.DependencyValue` which also
+    defines whether the dependency value is a singleton or not.
+
+    .. warning::
+
+        Beware of :py:func:`~.world.test.override.provider`, it can conflict with
+        :py:func:`~.world.test.override.factory` and :py:func:`~.world.test.override.singleton`.
+        Dependencies declared with :py:func:`~.world.test.override.singleton` will hide
+        :py:func:`~.world.test.override.provider`. And :py:func:`~.world.test.override.provider`
+        will hide :py:func:`~.world.test.override.factory`.
+
+:py:func:`.world.test.clone` will not keep any existing singleton by default, but you may change
+it:
+
+.. doctest:: tutorial_test
+
+    >>> world.singleton.add('hello', 'world')
+    >>> with world.test.clone():
+    ...     world.get('hello')
+    Traceback (most recent call last):
+      File "<stdin>", line 1, in ?
+    DependencyNotFoundError: 'hello'
+    >>> with world.test.clone(keep_singletons=True):
+    ...     world.get('hello')
+    'world'
+
+.. warning::
+
+    Beware. keeping singletons will re-use the same object:
+
+    .. doctest:: tutorial_test
+
+        >>> world.singleton.add('buffer', [])
+        >>> with world.test.clone(keep_singletons=True):
+        ...     world.get('buffer').append(1)
+        >>> world.get('buffer')  # We changed the singleton of the outside world.
+        [1]
+
+:py:mod:`.world.test` provides additional utilities when extending Antidote or defining abstract
+factories / services.
 
 

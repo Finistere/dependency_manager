@@ -56,7 +56,7 @@ class FactoryProvider(Provider[Hashable]):
             debug_repr(build),
             scope=factory.scope,
             wired=[factory.function] if factory.dependency is None else [],
-            dependencies=([factory.dependency]
+            dependencies=([factory.dependency, factory.dependency.__call__]
                           if factory.dependency is not None else []))
 
     def maybe_provide(self, build: Hashable, container: Container
@@ -111,6 +111,8 @@ class FactoryDependency(FinalImmutable):
     __hash: int
 
     def __init__(self, output: Hashable, factory: object):
+        if isinstance(factory, Dependency):
+            factory: object = factory.unwrapped
         super().__init__(output, factory, hash((output, factory)))
 
     def __repr__(self) -> str:

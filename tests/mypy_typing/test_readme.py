@@ -72,7 +72,7 @@ def test_readme():
     to dot it.
     """
     from antidote import (Constants, factory, inject, world, const, Service,
-                          implementation, UseArgName, Get, From)
+                          implementation, ProvideArgName, Get, From)
     from typing_extensions import Annotated
     # Or for Python 3.9+
     # from typing import Annotated
@@ -100,7 +100,7 @@ def test_readme():
         IMDB_API_KEY = const('imdb.api_key')
 
         @inject(use_names=True)  # injecting world.get('conf_path')
-        def __init__(self, conf_path: UseArgName[str]):
+        def __init__(self, conf_path: ProvideArgName[str]):
             """ Load configuration from `conf_path` """
             self._raw_conf = {
                 'imdb': {

@@ -204,6 +204,10 @@ def tree_debug_info(container: 'RawContainer',
                 tasks.append((parent, parent_dependencies, DependencyTask(d)))
 
     if not root.children and original_root is root:
+        from ..._providers.tag import TagDependency
+        if isinstance(origin, TagDependency):
+            return f"No dependencies tagged with {origin.tag!r}"
+
         return f"{origin!r} is neither a dependency nor is anything injected."
 
     output = [

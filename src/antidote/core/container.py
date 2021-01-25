@@ -490,6 +490,15 @@ class OverridableRawContainer(RawContainer):
                          factory: Callable[[], object],
                          scope: Optional[Scope]) -> None:
         with self.__override_lock:
+            try:
+                del self.__singletons_override[dependency]
+            except KeyError:
+                pass
+            for scope in self.__scopes_override:
+                try:
+                    del scope[dependency]
+                except KeyError:
+                    pass
             self.__factory_overrides[dependency] = (factory, scope)
 
     def override_provider(self,

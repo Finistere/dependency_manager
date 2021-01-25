@@ -1,6 +1,6 @@
 import pytest
 
-from antidote import Provide, Service, factory, implementation, inject, world
+from antidote import Factory, Provide, Service, factory, implementation, inject, world
 from antidote._implementation import validate_provided_class
 from antidote._providers import (FactoryProvider, IndirectProvider,
                                  ServiceProvider)
@@ -91,13 +91,13 @@ def test_implementation_with_factory():
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
-    @factory
-    def build_a(**kwargs) -> A:
-        return A(**kwargs)
+    class BuildA(Factory):
+        def __call__(self, **kwargs) -> A:
+            return A(**kwargs)
 
     @implementation(Interface)
     def impl2():
-        return A @ build_a.with_kwargs(test=x)
+        return A @ BuildA._with_kwargs(test=x)
 
     a = world.get(Interface @ impl2)
     assert isinstance(a, A)
@@ -183,15 +183,15 @@ def test_invalid_implementation_return_type():
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
 
-        @factory
-        def build_d(**kwargs) -> D:
-            return D(**kwargs)
+        class BuildD(Factory):
+            def __call__(self, **kwargs) -> D:
+                return D(**kwargs)
 
         @implementation(Interface)
         def impl2():
-            return D @ build_d.with_kwargs(test=1)
+            return D @ BuildD._with_kwargs(test=1)
 
-        world.get(D @ build_d.with_kwargs(test=1))
+        world.get(D @ BuildD._with_kwargs(test=1))
         with pytest.raises(DependencyInstantiationError):
             world.get(Interface @ impl2)
 
@@ -291,10 +291,24 @@ def test_validate_provided_class_factory():
         with pytest.raises(TypeError):
             validate_provided_class(B @ build_b, expected=Interface)
 
-        validate_provided_class(A @ build_a.with_kwargs(a=1), expected=Interface)
-        validate_provided_class(B @ build_b.with_kwargs(a=1), expected=B)
+    with world.test.new():
+        class BuildA(Factory):
+            def __call__(self, **kwargs) -> A:
+                return A(**kwargs)
+
+        class BuildB(Factory):
+            def __call__(self, **kwargs) -> B:
+                return B(**kwargs)
+
+        validate_provided_class(A @ BuildA, expected=Interface)
+        validate_provided_class(B @ BuildB, expected=B)
         with pytest.raises(TypeError):
-            validate_provided_class(B @ build_b.with_kwargs(a=1), expected=Interface)
+            validate_provided_class(B @ BuildB, expected=Interface)
+
+        validate_provided_class(A @ BuildA._with_kwargs(a=1), expected=Interface)
+        validate_provided_class(B @ BuildB._with_kwargs(a=1), expected=B)
+        with pytest.raises(TypeError):
+            validate_provided_class(B @ BuildB._with_kwargs(a=1), expected=Interface)
 
 
 def test_default_injection():

@@ -20,25 +20,6 @@ def current_world():
         yield
 
 
-def test_class():
-    @auto_provide
-    class A:
-        def f(self, x: Service):
-            return x
-
-        def g(self, z: Annotated[object, Get(Service)]):
-            return z
-
-        def h(self, y):
-            return y
-
-    assert A().f() is world.get(Service)
-    assert A().g() is world.get(Service)
-
-    with pytest.raises(TypeError):
-        A().h()
-
-
 def test_function():
     @auto_provide
     def f(x: Service):

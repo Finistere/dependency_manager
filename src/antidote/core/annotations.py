@@ -188,7 +188,7 @@ Annotation specifying that the type hint itself is the dependency:
 """
 
 # API.public
-UseArgName = Annotated[T, FromArgName("{arg_name}")]
-UseArgName.__doc__ = """
+ProvideArgName = Annotated[T, FromArgName("{arg_name}")]
+ProvideArgName.__doc__ = """
 The name of the argument will be used as the dependency.
 """

@@ -94,13 +94,18 @@ def test_custom_scope():
     assert world.get(Scoped @ scoped_factory) is not x
 
 
-def test_with_kwargs(build: Type[Factory]):
+def test_with_kwargs():
     x = object()
-    a = world.get(A @ build._with_kwargs(x=x))
+
+    class BuildA(Factory):
+        def __call__(self, **kwargs) -> A:
+            return A(**kwargs)
+
+    a = world.get(A @ BuildA._with_kwargs(x=x))
     assert a.kwargs == dict(x=x)
 
     with pytest.raises(ValueError, match=".*with_kwargs.*"):
-        A @ build._with_kwargs()
+        A @ BuildA._with_kwargs()
 
 
 def test_getattr():
@@ -120,8 +125,14 @@ def test_invalid_dependency(build: Type[Factory]):
     with pytest.raises(ValueError, match="Unsupported output.*"):
         B @ build
 
+
+def test_invalid_dependency_with_kwargs():
+    class BuildA(Factory):
+        def __call__(self) -> A:
+            return A()
+
     with pytest.raises(ValueError, match="Unsupported output.*"):
-        B @ build._with_kwargs(x=1)
+        B @ BuildA._with_kwargs(x=1)
 
 
 def test_missing_call():

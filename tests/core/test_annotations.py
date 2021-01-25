@@ -2,7 +2,7 @@ from typing import Callable, Optional, TypeVar, Union
 
 import pytest
 
-from antidote import From, FromArg, FromArgName, Get, Provide, UseArgName
+from antidote import From, FromArg, FromArgName, Get, Provide, ProvideArgName
 from antidote._compatibility.typing import Annotated
 from antidote._internal.argspec import Arguments
 from antidote._internal.utils import YesSet
@@ -37,7 +37,7 @@ def test_invalid_from_arg_name():
 
 
 def test_simple():
-    def g(x: UseArgName[Dummy]):
+    def g(x: ProvideArgName[Dummy]):
         pass
 
     arguments = Arguments.from_callable(g)
@@ -57,7 +57,7 @@ def test_simple():
         (Optional[Union[str, Dummy]], None),
         (Callable[..., Dummy], None),
         (Provide[Dummy], Dummy),
-        (UseArgName[Dummy], 'x'),
+        (ProvideArgName[Dummy], 'x'),
         (Annotated[Dummy, From(Maker())], Maker),
         (Annotated[Dummy, FromArg(lambda arg: arg.name * 2)], 'xx'),
         (Annotated[Dummy, FromArgName("conf:{arg_name}")], 'conf:x'),  # noqa: F722
@@ -91,7 +91,7 @@ def test_extract_explicit_arg_dependency(type_hint, expected):
         (Optional[Union[str, Dummy]], None),
         (Callable[..., Dummy], None),
         (Provide[Dummy], None),
-        (UseArgName[Dummy], None),
+        (ProvideArgName[Dummy], None),
         (Annotated[Dummy, From(Maker())], None),
         (Annotated[Dummy, FromArg(lambda arg: arg.name * 2)], None),
         (Annotated[Dummy, FromArgName("conf:{arg_name}")], None),  # noqa: F722
@@ -161,7 +161,7 @@ def test_unknown_antidote_annotations():
     pytest.param(type_hint,
                  id=str(type_hint).replace('typing.', '').replace(f"{__name__}.", ""))
     for type_hint in [
-        UseArgName[Dummy],
+        ProvideArgName[Dummy],
         Annotated[Dummy, FromArg(lambda arg: arg.name * 2)],
         Annotated[Dummy, FromArgName("conf:{arg_name}")]  # noqa: F722
     ]

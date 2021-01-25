@@ -55,9 +55,9 @@ def implementation(interface: type,
         >>> @implementation(Database)
         ... def local_db(choice: Annotated[str, Get('choice')]):
         ...     if choice == 'a':
-        ...         return PostgreSQL  # One could also use PostgreSQL.with_kwargs(...)
+        ...         return PostgreSQL
         ...     else:
-        ...         return MySQL @ build_mysql  # or MySQL @ build_mysql.with_kwargs(...)
+        ...         return MySQL @ build_mysql
         >>> world.singletons.add('choice', 'a')
         >>> world.get(Database @ local_db)
         <PostgreSQL ...>

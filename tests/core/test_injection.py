@@ -4,7 +4,7 @@ from typing import Optional, Sequence, Union
 
 import pytest
 
-from antidote import From, FromArg, FromArgName, Get, UseArgName, world
+from antidote import From, FromArg, FromArgName, Get, ProvideArgName, world
 from antidote._compatibility.typing import Annotated
 from antidote.core.annotations import Provide
 from antidote.core.injection import inject, validate_injection
@@ -528,7 +528,7 @@ def test_annotations(injector):
 
     with world.test.empty():
         @injector
-        def use_arg_name(x: UseArgName[Dummy]):
+        def use_arg_name(x: ProvideArgName[Dummy]):
             return x
 
         world.singletons.add('x', Dummy())

@@ -65,9 +65,9 @@ def test_override_factory(container: OverridableRawContainer):
         assert not isinstance(value, str)
         assert container.get(dep) is value
 
+        # override still works
         container.override_factory(dep, factory=lambda: object(), scope=Scope.singleton())
-        # didn't change anything, because it's now a singleton.
-        assert container.get(dep) is value
+        assert container.get(dep) is not value
 
         container.override_singletons({dep: 'Hello'})
         assert container.get(dep) == 'Hello'

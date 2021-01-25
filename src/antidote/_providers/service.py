@@ -32,7 +32,7 @@ class Build(FinalImmutable):
         return f"Build(dependency={self.dependency}, kwargs={self.kwargs})"
 
     def __antidote_debug_repr__(self) -> str:
-        return f"{debug_repr(self.dependency)}(**{self.kwargs})"
+        return f"{debug_repr(self.dependency)} with kwargs={self.kwargs}"
 
     def __eq__(self, other: object) -> bool:
         return (isinstance(other, Build)

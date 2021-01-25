@@ -2,7 +2,8 @@ import textwrap
 
 from typing_extensions import Annotated
 
-from antidote import (Constants, From, LazyCall, LazyMethodCall, Provide, Service, Tag,
+from antidote import (Constants, Factory, From, LazyCall, LazyMethodCall, Provide,
+                      Service, Tag,
                       Tagged,
                       const,
                       factory, implementation, inject, world)
@@ -286,12 +287,18 @@ def test_tag():
     prefix = "tests.world.test_debug.test_tag.<locals>"
 
     with world.test.new():
+        empty_tag = Tag('empty')
         tag = Tag('dummy')
 
         class S1(Service):
             __antidote__ = Service.Conf(tags=[tag])
 
         assert_valid(
+            DebugTestCase(
+                value=Tagged.with_(empty_tag),
+                expected=f"No dependencies tagged with Tag('empty')#{short_id(empty_tag)}",
+                legend=False
+            ),
             DebugTestCase(
                 value=Tagged.with_(tag),
                 expected=f"""
@@ -443,9 +450,9 @@ def test_complex_debug():
             def __init__(self, service1: Provide[Service1]):
                 self.service1 = service1
 
-        @factory
-        def build_s2(service1: Provide[Service1]) -> Service2:
-            return Service2(service1)
+        class BuildS2(Factory):
+            def __call__(self, service1: Provide[Service1] = None) -> Service2:
+                return Service2(service1)
 
         @implementation(Interface)
         def impl():
@@ -456,7 +463,7 @@ def test_complex_debug():
                                         tags=[tag]).with_wiring(
                 dependencies=dict(
                     i=Interface @ impl,
-                    service2=Service2 @ build_s2))
+                    service2=Service2 @ BuildS2))
 
             def __init__(self,
                          service1: Provide[Service1],
@@ -476,7 +483,7 @@ def test_complex_debug():
 
             def __init__(self,
                          service1: Provide[Service1],
-                         service2: Annotated[Service2, From(build_s2)],
+                         service2: Annotated[Service2, From(BuildS2)],
                          service3: Provide[Service3]):
                 self.service1 = service1
                 self.service2 = service2
@@ -487,7 +494,7 @@ def test_complex_debug():
             pass
 
         @inject(dependencies=[Service1._with_kwargs(test=1),
-                              Service2 @ build_s2.with_kwargs(option=2)])
+                              Service2 @ BuildS2._with_kwargs(option=2)])
         def f_with_options(a, b):
             pass
 
@@ -516,11 +523,11 @@ def test_complex_debug():
                     <∅> Tagged with Tag#{short_id(tag)}
                     ├── {prefix}.Service4
                     │   ├──<∅> {prefix}.Service3
-                    │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                    │   ├── {prefix}.Service2 @ {prefix}.BuildS2
                     │   └── {prefix}.Service1
                     └──<∅> {prefix}.Service3
                         ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
-                        ├── {prefix}.Service2 @ {prefix}.build_s2
+                        ├── {prefix}.Service2 @ {prefix}.BuildS2
                         └── {prefix}.Service1
                         """
             ),
@@ -532,17 +539,17 @@ def test_complex_debug():
                 ├── {prefix}.Service4
                 │   ├──<∅> {prefix}.Service3
                 │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
-                │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
+                │   │   ├── {prefix}.Service2 @ {prefix}.BuildS2
                 │   │   └── {prefix}.Service1
-                │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                │   │   └── {prefix}.build_s2
+                │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   └── {prefix}.BuildS2
                 │   │       └── {prefix}.Service1
                 │   └── {prefix}.Service1
                 └──<∅> {prefix}.Service3
                     ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   └── {prefix}.Service4
-                    ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   └── {prefix}.build_s2
+                    ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   └── {prefix}.BuildS2
                     │       └── {prefix}.Service1
                     └── {prefix}.Service1
                         """
@@ -555,24 +562,24 @@ def test_complex_debug():
                 │   ├──<∅> {prefix}.Service3
                 │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                 │   │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
-                │   │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                │   │   │   └── {prefix}.build_s2
+                │   │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   │   └── {prefix}.BuildS2
                 │   │   │       └── {prefix}.Service1
                 │   │   └── {prefix}.Service1
-                │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                │   │   └── {prefix}.build_s2
+                │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   └── {prefix}.BuildS2
                 │   │       └── {prefix}.Service1
                 │   └── {prefix}.Service1
                 └──<∅> {prefix}.Service3
                     ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   └── {prefix}.Service4
                     │       ├── /!\\ Cyclic dependency: {prefix}.Service3
-                    │       ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │       │   └── {prefix}.build_s2
+                    │       ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │       │   └── {prefix}.BuildS2
                     │       │       └── {prefix}.Service1
                     │       └── {prefix}.Service1
-                    ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   └── {prefix}.build_s2
+                    ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   └── {prefix}.BuildS2
                     │       └── {prefix}.Service1
                     └── {prefix}.Service1
                         """
@@ -585,12 +592,12 @@ def test_complex_debug():
                     ├──<∅> {prefix}.Service3
                     │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
-                    │   ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   │   └── {prefix}.build_s2
+                    │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   │   └── {prefix}.BuildS2
                     │   │       └── {prefix}.Service1
                     │   └── {prefix}.Service1
-                    ├── {prefix}.Service2 @ {prefix}.build_s2
-                    │   └── {prefix}.build_s2
+                    ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   └── {prefix}.BuildS2
                     │       └── {prefix}.Service1
                     └── {prefix}.Service1
                         """
@@ -599,8 +606,8 @@ def test_complex_debug():
                 value=f_with_options,
                 expected=f"""
                     {prefix}.f_with_options
-                    ├── {prefix}.Service2 @ {prefix}.build_s2(**{{'option': 2}})
-                    │   └── {prefix}.build_s2
+                    ├── {prefix}.Service2 @ {prefix}.BuildS2 with kwargs={{'option': 2}}
+                    │   └── {prefix}.BuildS2
                     │       └── {prefix}.Service1
                     └── {prefix}.Service1(**{{'test': 1}})
                     """

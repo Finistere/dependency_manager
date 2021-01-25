@@ -2,7 +2,7 @@ from typing import cast, overload
 
 from antidote import (Provide, const, Constants, inject, Service, world, factory, Get,
                       From,
-                      UseArgName)
+                      ProvideArgName)
 from antidote._compatibility.typing import Protocol, Annotated
 
 
@@ -58,7 +58,7 @@ def test_annotated_typing() -> None:
         assert g().hello() is world.get[Dummy](Dummy @ build_dummy)
 
         @inject
-        def h(dummy: UseArgName[Dummy] = None) -> Dummy:
+        def h(dummy: ProvideArgName[Dummy] = None) -> Dummy:
             assert dummy is not None
             return dummy
 

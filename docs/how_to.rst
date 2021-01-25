@@ -62,28 +62,86 @@ debug dependency issues
 
 
 If you encounter dependency issues or cycles, you can take a look at the whole dependency
-tree with :py:func:`.world.debug`. It will provide a summarized view like the following::
+tree with :py:func:`.world.debug`:
+
+.. testcode:: how_to_debug
+
+    from antidote import world, Service, inject, Provide
+
+    class MyService(Service):
+    pass
+
+    @inject
+    def f(s: Provide[MyService]):
+        pass
+
+    print(world.debug(f))
+
+It will output:
+
+.. code-block:: text
 
     f
-    └── Static link: MovieDB -> IMDBMovieDB
-        └── * IMDBMovieDB
-            ├── ImdbAPI @ imdb_factory
-            │   └── imdb_factory
-            │       └── Lazy: Conf()  #yIlnAQ
-            │           └── Singleton 'conf_path' -> '/etc/app.conf'
-            └── Lazy: Conf()  #yImm
-                └── Singleton 'conf_path' -> '/etc/app.conf'
+    └── MyService
 
-    * = not singleton
+    Singletons have no scope markers.
+    <∅> = no scope (new instance each time)
+    <name> = custom scope
 
-:py:func:`~.world.debug` will not instantiate anything or run any user code. Hence it
-won't work really well with :py:func:`.implementation` for example if it hasn't been called
-once yet or if the implementation is not permanent. On top of providing the whole tree,
-it also shows:
 
-- Whenever a :code:`*` is present at th beginning, the dependency is not a singleton. In the previous
-  example, :code:`IMDBMoveDB` is not a singleton. So a new instance is returned each time.
-- Ambiguous dependencies, such as lazy ones, the id of the object will be specified like
-  :code:`#yIlnAQ`. In the example, one can see that the two :code:`Lazy: Conf()` do not have
-  the same id. This means that :code:`imdb_factory` and :code:`IMDBMovieDB` are not actually
-  using the same object.
+.. note::
+
+    If you're not using scopes, you only need to remember that :code:`<∅>` is equivalent
+    to :code:`singleton=False`.
+
+
+Now wit the more complex example presented in the home page of Antidote we have:
+
+.. code-block:: text
+
+    f
+    └── Permanent implementation: MovieDB @ current_movie_db
+        └──<∅> IMDBMovieDB
+            └── ImdbAPI @ imdb_factory
+                └── imdb_factory
+                    ├── Const: Conf.IMDB_API_KEY
+                    │   └── Conf
+                    │       └── Singleton: 'conf_path' -> '/etc/app.conf'
+                    ├── Const: Conf.IMDB_PORT
+                    │   └── Conf
+                    │       └── Singleton: 'conf_path' -> '/etc/app.conf'
+                    └── Const: Conf.IMDB_HOST
+                        └── Conf
+                            └── Singleton: 'conf_path' -> '/etc/app.conf'
+
+    Singletons have no scope markers.
+    <∅> = no scope (new instance each time)
+    <name> = custom scope
+
+
+If you ever encounter a cyclic dependency, it will be present with a:
+
+.. code-block:: text
+
+    /!\\ Cyclic dependency: X
+
+Ambiguous dependencies, which cannot be identified uniquely through their name, such as tags,
+will have their id added to help differentiate them:
+
+.. testcode:: how_to_debug
+
+    from antidote import Tag, Tagged
+
+    dummy_tag = Tag('dummy')
+    dummy_tag2 = Tag('dummy')
+
+    print(world.debug(Tagged.with_(dummy_tag)))
+    print(world.debug(Tagged.with_(dummy_tag2)))
+
+will output the following
+
+.. code-block:: text
+
+    No dependencies tagged with Tag('dummy')#QIKUBw
+    No dependencies tagged with Tag('dummy')#wCqrBw
+

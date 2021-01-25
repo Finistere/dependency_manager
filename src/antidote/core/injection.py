@@ -211,7 +211,7 @@ def validate_injection(dependencies: DEPENDENCIES_TYPE = None,
             f"not {type(use_names)!r}.")
 
     # If we can iterate over it safely
-    if isinstance(use_names, (list, set, tuple)):
+    if isinstance(use_names, (list, set, tuple, frozenset)):
         if not all(isinstance(arg_name, str) for arg_name in use_names):
             raise TypeError("use_names must be list of argument names (str) or a boolean")
 
@@ -222,7 +222,7 @@ def validate_injection(dependencies: DEPENDENCIES_TYPE = None,
             f"not {type(auto_provide)!r}.")
 
     # If we can iterate over it safely
-    if isinstance(auto_provide, (list, set, tuple)):
+    if isinstance(auto_provide, (list, set, tuple, frozenset)):
         for cls in auto_provide:
             if not isinstance(cls, type) and inspect.isclass(cls):
                 raise TypeError(f"auto_provide must be a boolean or an iterable of "
