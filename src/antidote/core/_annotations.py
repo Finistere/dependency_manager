@@ -1,6 +1,6 @@
 import builtins
 import inspect
-from typing import Hashable, Set, Union
+from typing import Union
 
 from .annotations import (AntidoteAnnotation, From, FromArg, FromArgName, Get,
                           INJECT_SENTINEL)
@@ -110,6 +110,8 @@ def extract_auto_provided_arg_dependency(argument: Argument) -> object:
                                 if isinstance(a, AntidoteAnnotation)]
         if not antidote_annotations:
             dependency = args[0]
+        else:
+            return None  # necessary for Python 3.6
 
     if (getattr(dependency, '__module__', '') != 'typing'
             and dependency not in _BUILTINS_TYPES

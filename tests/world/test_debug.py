@@ -1,12 +1,8 @@
 import textwrap
 
-from typing_extensions import Annotated
-
 from antidote import (Constants, Factory, From, LazyCall, LazyMethodCall, Provide,
-                      Service, Tag,
-                      Tagged,
-                      const,
-                      factory, implementation, inject, world)
+                      Service, Tag, Tagged, const, implementation, inject, world)
+from antidote._compatibility.typing import Annotated
 from antidote._internal.utils import short_id
 
 
@@ -296,7 +292,8 @@ def test_tag():
         assert_valid(
             DebugTestCase(
                 value=Tagged.with_(empty_tag),
-                expected=f"No dependencies tagged with Tag('empty')#{short_id(empty_tag)}",
+                expected=f"No dependencies tagged with "
+                         f"Tag('empty')#{short_id(empty_tag)}",
                 legend=False
             ),
             DebugTestCase(
@@ -542,15 +539,17 @@ def test_complex_debug():
                 │   │   ├── {prefix}.Service2 @ {prefix}.BuildS2
                 │   │   └── {prefix}.Service1
                 │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   ├── {prefix}.BuildS2.__call__
+                │   │   │   └── {prefix}.Service1
                 │   │   └── {prefix}.BuildS2
-                │   │       └── {prefix}.Service1
                 │   └── {prefix}.Service1
                 └──<∅> {prefix}.Service3
                     ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   └── {prefix}.Service4
                     ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   ├── {prefix}.BuildS2.__call__
+                    │   │   └── {prefix}.Service1
                     │   └── {prefix}.BuildS2
-                    │       └── {prefix}.Service1
                     └── {prefix}.Service1
                         """
             ),
@@ -563,25 +562,30 @@ def test_complex_debug():
                 │   │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                 │   │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
                 │   │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   │   ├── {prefix}.BuildS2.__call__
+                │   │   │   │   └── {prefix}.Service1
                 │   │   │   └── {prefix}.BuildS2
-                │   │   │       └── {prefix}.Service1
                 │   │   └── {prefix}.Service1
                 │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                │   │   ├── {prefix}.BuildS2.__call__
+                │   │   │   └── {prefix}.Service1
                 │   │   └── {prefix}.BuildS2
-                │   │       └── {prefix}.Service1
                 │   └── {prefix}.Service1
                 └──<∅> {prefix}.Service3
                     ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   └── {prefix}.Service4
                     │       ├── /!\\ Cyclic dependency: {prefix}.Service3
                     │       ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │       │   ├── {prefix}.BuildS2.__call__
+                    │       │   │   └── {prefix}.Service1
                     │       │   └── {prefix}.BuildS2
-                    │       │       └── {prefix}.Service1
                     │       └── {prefix}.Service1
                     ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   ├── {prefix}.BuildS2.__call__
+                    │   │   └── {prefix}.Service1
                     │   └── {prefix}.BuildS2
-                    │       └── {prefix}.Service1
                     └── {prefix}.Service1
+
                         """
             ),
             DebugTestCase(
@@ -593,12 +597,14 @@ def test_complex_debug():
                     │   ├── Permanent implementation: {prefix}.Interface @ {prefix}.impl
                     │   │   └── /!\\ Cyclic dependency: {prefix}.Service4
                     │   ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   │   ├── {prefix}.BuildS2.__call__
+                    │   │   │   └── {prefix}.Service1
                     │   │   └── {prefix}.BuildS2
-                    │   │       └── {prefix}.Service1
                     │   └── {prefix}.Service1
                     ├── {prefix}.Service2 @ {prefix}.BuildS2
+                    │   ├── {prefix}.BuildS2.__call__
+                    │   │   └── {prefix}.Service1
                     │   └── {prefix}.BuildS2
-                    │       └── {prefix}.Service1
                     └── {prefix}.Service1
                         """
             ),
@@ -607,9 +613,10 @@ def test_complex_debug():
                 expected=f"""
                     {prefix}.f_with_options
                     ├── {prefix}.Service2 @ {prefix}.BuildS2 with kwargs={{'option': 2}}
+                    │   ├── {prefix}.BuildS2.__call__
+                    │   │   └── {prefix}.Service1
                     │   └── {prefix}.BuildS2
-                    │       └── {prefix}.Service1
-                    └── {prefix}.Service1(**{{'test': 1}})
+                    └── {prefix}.Service1 with kwargs={{'test': 1}}
                     """
             )
         )

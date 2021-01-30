@@ -75,13 +75,22 @@ cdef class FactoryProvider(FastProvider):
         except KeyError:
             return None
 
+        dependencies = []
+        wired = []
+        if factory.dependency is not None:
+            dependencies.append(factory.dependency)
+            if isinstance(factory.dependency, type) \
+                    and inspect.isclass(factory.dependency):
+                wired.append(factory.dependency.__call__)
+        else:
+            wired.append(factory.function)
+
         header = HeaderObject(factory.header)
         return DependencyDebug(
             debug_repr(build),
             scope=header.to_scope(self._bound_container()),
-            wired=[factory.function] if factory.dependency is None else [],
-            dependencies=([factory.dependency]
-                          if factory.dependency is not None else []))
+            wired=wired,
+            dependencies=dependencies)
 
     cdef fast_provide(self,
                       PyObject*dependency,
@@ -165,7 +174,7 @@ cdef class FactoryDependency:
 
     def __init__(self, object output, object factory):
         self.output = output
-        self.factory = factory
+        self.factory = factory.unwrapped if isinstance(factory, Dependency) else factory
         self._hash = hash((output, factory))
 
     def __repr__(self) -> str:

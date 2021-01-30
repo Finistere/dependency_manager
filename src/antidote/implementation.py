@@ -42,7 +42,8 @@ def implementation(interface: type,
     .. doctest:: helpers_implementation
 
         >>> from antidote import implementation, Service, factory, world, Get
-        >>> from typing_extensions import Annotated
+        >>> from typing import Annotated
+        ... # from typing_extensions import Annotated # Python < 3.9
         >>> class Database:
         ...     pass
         >>> class PostgreSQL(Database, Service):

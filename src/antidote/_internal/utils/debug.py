@@ -2,8 +2,7 @@ import base64
 import inspect
 import textwrap
 from collections import deque
-from typing import (Deque, Hashable, List, Optional, Sequence, Set, Tuple,
-                    TYPE_CHECKING)
+from typing import (Deque, Hashable, List, Optional, Sequence, Set, TYPE_CHECKING, Tuple)
 
 from .immutable import Immutable
 from .. import API
@@ -37,7 +36,11 @@ def debug_repr(__obj: object) -> str:
     if (isinstance(__obj, type) and inspect.isclass(__obj)) \
             or inspect.isfunction(__obj) \
             or is_wrapper(__obj):
-        module = (__obj.__module__ + ".") if __obj.__module__ != "__main__" else ""
+        if isinstance(__obj.__module__, str) \
+                and __obj.__module__ not in {"__main__", "builtins"}:
+            module = __obj.__module__ + "."
+        else:
+            module = ""
         return f"{module}{__obj.__qualname__}"  # type: ignore
     return repr(__obj)
 

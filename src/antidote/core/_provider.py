@@ -1,6 +1,6 @@
 import functools
 import inspect
-from typing import Callable, cast, Dict, Set, Tuple, Type, TypeVar
+from typing import Callable, Dict, Set, Tuple, Type, TypeVar, cast
 
 from .container import RawProvider
 from .exceptions import FrozenWorldError

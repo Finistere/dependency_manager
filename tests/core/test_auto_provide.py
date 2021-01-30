@@ -25,6 +25,10 @@ def test_function():
     def f(x: Service):
         return x
 
+    @auto_provide()
+    def f2(x: Service):
+        return x
+
     @auto_provide
     def g(z: Annotated[object, Get(Service)]):
         return z
@@ -34,7 +38,50 @@ def test_function():
         return y
 
     assert f() is world.get(Service)
+    assert f2() is world.get(Service)
     assert g() is world.get(Service)
+
+    with pytest.raises(TypeError):
+        h()
+
+
+def test_use_names():
+    @auto_provide(use_names=True)
+    def f(y):
+        return y
+
+    assert f() is world.get('y')
+
+    @auto_provide(use_names=['y'])
+    def g(y):
+        return y
+
+    assert g() is world.get('y')
+
+    @auto_provide(use_names=False)
+    def h(y):
+        return y
+
+    with pytest.raises(TypeError):
+        h()
+
+
+def test_dependencies():
+    @auto_provide(dependencies=dict(y=Service))
+    def f(y):
+        return y
+
+    assert f() is world.get(Service)
+
+    @auto_provide(dependencies="{arg_name}")
+    def g(y):
+        return y
+
+    assert g() is world.get('y')
+
+    @auto_provide(dependencies=None)
+    def h(y):
+        return y
 
     with pytest.raises(TypeError):
         h()

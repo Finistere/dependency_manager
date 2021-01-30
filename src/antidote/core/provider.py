@@ -1,7 +1,7 @@
 from contextlib import contextmanager
-from typing import Callable, cast, Generic, Hashable, Iterator, Optional, TypeVar
+from typing import Callable, Generic, Hashable, Iterator, Optional, TypeVar, cast
 
-from ._provider import _FREEZE_ATTR_NAME, ProviderMeta
+from ._provider import ProviderMeta, _FREEZE_ATTR_NAME
 from .container import Container, DependencyValue, RawProvider
 from .exceptions import DebugNotAvailableError
 from .utils import DependencyDebug

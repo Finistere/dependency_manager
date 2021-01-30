@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Hashable, Optional, TypeVar
+from typing import Callable, Hashable, Optional, TypeVar
 
 from .injection import Arg
 from .._compatibility.typing import Annotated, Protocol
@@ -36,20 +36,6 @@ class Get(FinalImmutable, AntidoteAnnotation):
         ...         self.host = host
         >>> world.get[Database]().host == world.get("db_host")
         True
-        >>> DifferentDatabase = Annotated[Database,
-        ...                               Get(Database._with_kwargs(host='different'))]
-        >>> @inject
-        ... def load_db(db: DifferentDatabase):
-        ...     return db
-        >>> load_db().host
-        'different'
-        >>> # Annotations are also supported in world.get()
-        ... world.get[Database](DifferentDatabase).host
-        'different'
-        >>> # But aren't necessary. However, it's more convenient if you use them
-        ... # already as type hints.
-        ... world.get[Database](Database._with_kwargs(host='different')).host
-        'different'
 
     """
     __slots__ = ('dependency',)
@@ -81,15 +67,6 @@ class From(FinalImmutable, AntidoteAnnotation):
         ...     return db
         >>> f().host
         'localhost:6789'
-        >>> DifferentDatabase = Annotated[Database,
-        ...                               From(build_db._with_kwargs(host='different'))]
-        >>> # Annotations are also supported in world.get()
-        ... world.get[Database](DifferentDatabase).host
-        'different'
-        >>> # But aren't necessary. However, it's more convenient if you use them
-        ... # already as type hints.
-        ... world.get[Database](Database @ build_db._with_kwargs(host='different')).host
-        'different'
 
     """
     __slots__ = ('source',)
@@ -176,7 +153,8 @@ Annotation specifying that the type hint itself is the dependency:
 .. doctest:: core_annotation_provide
 
     >>> from antidote import Service, world, inject, Provide
-    >>> from typing_extensions import Annotated  # Or from typing if Python 3.9+
+    >>> from typing import Annotated
+    ... # from typing_extensions import Annotated # Python < 3.9
     >>> class Database(Service):
     ...     pass
     >>> @inject

@@ -3,7 +3,7 @@ from typing import Callable, Optional, Union
 
 from ._compatibility.typing import final
 from ._internal import API
-from ._internal.utils import debug_repr, FinalImmutable, short_id
+from ._internal.utils import FinalImmutable, debug_repr, short_id
 from ._lazy import (LazyCallWithArgsKwargs, LazyMethodCallDependency,
                     LazyMethodCallWithArgsKwargs)
 from ._providers import Lazy

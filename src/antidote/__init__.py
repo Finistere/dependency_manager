@@ -1,7 +1,7 @@
 from . import world
 from .constants import Constants, const
-from .core import (From, FromArg, FromArgName, Get, Provide, Scope, ProvideArgName, Wiring,
-                   auto_provide, inject, wire)
+from .core import (From, FromArg, FromArgName, Get, Provide, ProvideArgName, Scope,
+                   Wiring, auto_provide, inject, wire)
 from .factory import Factory, factory
 from .implementation import implementation
 from .lazy import LazyCall, LazyMethodCall

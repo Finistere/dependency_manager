@@ -1,9 +1,9 @@
 import weakref
-from typing import Callable, cast, Dict, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Callable, Dict, Optional, TYPE_CHECKING, Tuple, Union, cast
 
 from ._compatibility.typing import final
 from ._internal import API
-from ._internal.utils import debug_repr, FinalImmutable, short_id
+from ._internal.utils import FinalImmutable, debug_repr, short_id
 from ._providers import Lazy
 from .core import Container, DependencyDebug, DependencyValue, Scope
 

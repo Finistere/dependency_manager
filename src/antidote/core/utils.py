@@ -1,10 +1,9 @@
-from typing import cast, Generic, Hashable, Optional, Sequence, TypeVar, Union
+from typing import Generic, Hashable, Optional, Sequence, TypeVar, cast
 
 from .container import Scope
 from .._compatibility.typing import final
 from .._internal import API
-from .._internal.utils import FinalImmutable, Immutable, Default
-from .._internal.utils.debug import debug_repr
+from .._internal.utils import FinalImmutable, Immutable
 from .._internal.utils.immutable import ImmutableGenericMeta
 
 T = TypeVar('T')
@@ -57,10 +56,6 @@ class Dependency(Immutable, Generic[T], metaclass=ImmutableGenericMeta):
         return (isinstance(other, Dependency)
                 and (self.unwrapped is other.unwrapped
                      or self.unwrapped == other.unwrapped))
-
-    @API.private
-    def __antidote_debug_repr__(self) -> str:
-        return f"Dependency(wrapped={debug_repr(self.unwrapped)})"
 
 
 @API.public

@@ -1,7 +1,7 @@
 """
 Utilities used by world, mostly for syntactic sugar.
 """
-from typing import Any, Callable, cast, Hashable, Type, TypeVar, TYPE_CHECKING, Union
+from typing import Any, Callable, Hashable, TYPE_CHECKING, Type, TypeVar, Union, cast
 
 from . import API
 from .utils import Default

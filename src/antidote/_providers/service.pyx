@@ -40,7 +40,7 @@ cdef class Build:
         return f"Build(dependency={self.dependency}, kwargs={self.kwargs})"
 
     def __antidote_debug_repr__(self):
-        return f"{debug_repr(self.dependency)}(**{self.kwargs})"
+        return f"{debug_repr(self.dependency)} with kwargs={self.kwargs}"
 
     def __eq__(self, other):
         return (isinstance(other, Build)

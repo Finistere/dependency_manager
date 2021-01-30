@@ -1,4 +1,4 @@
-from typing import cast, Dict, Tuple, Type
+from typing import Dict, Tuple, Type, cast
 
 from .slots import SlotsRepr
 from .. import API

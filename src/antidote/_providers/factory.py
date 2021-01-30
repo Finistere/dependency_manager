@@ -3,7 +3,7 @@ from typing import Callable, Dict, Hashable, Optional, Union
 
 from .service import Build
 from .._internal import API
-from .._internal.utils import debug_repr, FinalImmutable, SlotRecord
+from .._internal.utils import FinalImmutable, SlotRecord, debug_repr
 from ..core import (Container, Dependency, DependencyDebug, DependencyValue, Provider,
                     Scope)
 
@@ -52,12 +52,20 @@ class FactoryProvider(Provider[Hashable]):
         except KeyError:
             return None
 
-        return DependencyDebug(
-            debug_repr(build),
-            scope=factory.scope,
-            wired=[factory.function] if factory.dependency is None else [],
-            dependencies=([factory.dependency, factory.dependency.__call__]
-                          if factory.dependency is not None else []))
+        dependencies = []
+        wired = []
+        if factory.dependency is not None:
+            dependencies.append(factory.dependency)
+            if isinstance(factory.dependency, type) \
+                    and inspect.isclass(factory.dependency):
+                wired.append(factory.dependency.__call__)
+        else:
+            wired.append(factory.function)
+
+        return DependencyDebug(debug_repr(build),
+                               scope=factory.scope,
+                               wired=wired,
+                               dependencies=dependencies)
 
     def maybe_provide(self, build: Hashable, container: Container
                       ) -> Optional[DependencyValue]:
@@ -112,7 +120,7 @@ class FactoryDependency(FinalImmutable):
 
     def __init__(self, output: Hashable, factory: object):
         if isinstance(factory, Dependency):
-            factory: object = factory.unwrapped
+            factory = factory.unwrapped
         super().__init__(output, factory, hash((output, factory)))
 
     def __repr__(self) -> str:

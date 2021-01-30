@@ -243,9 +243,8 @@ You can also use :code:`Annotated`:
 
 .. code-block:: python
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
     from antidote import From
 
     @inject

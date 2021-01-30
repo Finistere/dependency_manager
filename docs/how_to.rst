@@ -69,7 +69,7 @@ tree with :py:func:`.world.debug`:
     from antidote import world, Service, inject, Provide
 
     class MyService(Service):
-    pass
+        pass
 
     @inject
     def f(s: Provide[MyService]):
@@ -79,7 +79,8 @@ tree with :py:func:`.world.debug`:
 
 It will output:
 
-.. code-block:: text
+.. testoutput:: how_to_debug
+    :options: +NORMALIZE_WHITESPACE
 
     f
     └── MyService
@@ -139,6 +140,12 @@ will have their id added to help differentiate them:
     print(world.debug(Tagged.with_(dummy_tag2)))
 
 will output the following
+
+.. testoutput:: how_to_debug
+    :options: +NORMALIZE_WHITESPACE
+
+    No dependencies tagged with Tag('dummy')#...
+    No dependencies tagged with Tag('dummy')#...
 
 .. code-block:: text
 

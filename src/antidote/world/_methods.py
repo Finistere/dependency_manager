@@ -1,9 +1,9 @@
 import inspect
-from typing import Dict, Hashable, overload, Type, TypeVar, Union
+from typing import Dict, Hashable, Type, TypeVar, Union, overload
 
 from .._internal import API
-from .._internal.state import init, current_container
-from antidote._internal.world import WorldGet, WorldLazy
+from .._internal.state import current_container, init
+from .._internal.world import WorldGet, WorldLazy
 from ..core.container import RawProvider, Scope
 
 # Create the global container

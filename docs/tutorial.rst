@@ -118,9 +118,8 @@ To retrieve our new singleton with :py:func:`.inject` we could do:
 
 .. testcode:: tutorial_overview
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     from antidote import Get
 
@@ -332,9 +331,8 @@ like this:
 
 .. testcode:: tutorial_services
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     from antidote import Get
 
@@ -422,8 +420,6 @@ used first:
     .. testcode:: tutorial_injection
 
         from antidote import world
-
-        world.singletons.add('host', 'localhost')
 
         # When needed None can be used a placeholder for argument that should be ignored.
         @inject(dependencies=[MyService, 'host'])
@@ -549,7 +545,7 @@ For conciseness, Antidote provides some shortcuts:
 
     .. testcode:: tutorial_wiring
 
-        class KeepDefaultWiring(Service):
+        class UseNamesWiring(Service):
             __antidote__ = Service.Conf().with_wiring(use_names=True)
 
             def __init__(self, host_name: str):
@@ -557,7 +553,7 @@ For conciseness, Antidote provides some shortcuts:
 
     .. doctest:: tutorial_wiring
 
-        >>> world.get[KeepAutoWiring]().host_name
+        >>> world.get[UseNamesWiring]().host_name
         'localhost'
 
 -   :py:meth:`~.Service.Conf.auto_provide`: Use :code:`auto_provide=True` by default, in
@@ -585,7 +581,7 @@ For conciseness, Antidote provides some shortcuts:
 
         @wire
         class Dummy:
-            def get(my_service: Provide[MyService]):
+            def get(self, my_service: Provide[MyService]):
                 return my_service
 
     .. doctest:: tutorial_wiring
@@ -603,9 +599,8 @@ easily, like a service where you only need to go to the class definition.
 
 .. testcode:: tutorial_conf
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     from antidote import Constants, inject, const, Get
 
@@ -686,9 +681,8 @@ decorator :py:func:`.factory.factory`:
 
 .. testcode:: tutorial_factory
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     from antidote import factory, inject, ProvideArgName, From
 
@@ -740,9 +734,8 @@ If you need more complex factories, you can use a class instead by inheriting :p
 
 .. testcode:: tutorial_factory_v2
 
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     from antidote import Factory, ProvideArgName
 
@@ -772,7 +765,7 @@ If you need more complex factories, you can use a class instead by inheriting :p
 You've seen until now that Antidote's :py:func:`.inject` does not force you to rely on
 the injection to be used:
 
-.. testcode:: tutorial_test_debug
+.. testcode:: tutorial_test
 
     from antidote import Service, inject, Provide
 
@@ -868,7 +861,7 @@ override any dependency in it:
     >>> with world.test.clone():
     ...     world.test.override.singleton(MyService, 'dummy')
     ...     f()
-    dummy
+    'dummy'
 
 :py:mod:`.world.test.override` exposes three ways to override dependencies:
 
@@ -885,7 +878,7 @@ override any dependency in it:
         ...     # Multiple dependencies can be declared with a dict
         ...     override.singleton({MyService: 'dummy'})
         ...     f()
-        dummy
+        'dummy'
 
 -   :py:func:`~.world.test.override.factory`
 
@@ -901,7 +894,7 @@ override any dependency in it:
         ...     def override_my_service() -> MyService:
         ...         return 'dummy'
         ...     f()
-        dummy
+        'dummy'
 
 -   :py:func:`~.world.test.override.provider`
 
@@ -914,7 +907,7 @@ override any dependency in it:
         ...         if dependency is MyService:
         ...             return DependencyValue('dummy')
         ...     f()
-        dummy
+        'dummy'
 
     The decorated function will be called each time a dependency is needed. If it can be
     provided it should be returned wrapped by a :py:class:`~.core.DependencyValue` which also
@@ -933,7 +926,7 @@ it:
 
 .. doctest:: tutorial_test
 
-    >>> world.singleton.add('hello', 'world')
+    >>> world.singletons.add('hello', 'world')
     >>> with world.test.clone():
     ...     world.get('hello')
     Traceback (most recent call last):
@@ -949,7 +942,7 @@ it:
 
     .. doctest:: tutorial_test
 
-        >>> world.singleton.add('buffer', [])
+        >>> world.singletons.add('buffer', [])
         >>> with world.test.clone(keep_singletons=True):
         ...     world.get('buffer').append(1)
         >>> world.get('buffer')  # We changed the singleton of the outside world.

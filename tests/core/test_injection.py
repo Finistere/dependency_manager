@@ -1,5 +1,4 @@
 import itertools
-from contextlib import contextmanager
 from typing import Optional, Sequence, Union
 
 import pytest
@@ -13,9 +12,12 @@ from antidote.exceptions import DependencyNotFoundError, DoubleInjectionError
 SENTINEL = object()
 
 
-@contextmanager
-def does_not_raise():
-    yield
+class DoesNotRaise:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
 
 class Service:
@@ -27,20 +29,34 @@ class AnotherService:
 
 
 @pytest.mark.parametrize('kwargs, expectation', [
-    (dict(), does_not_raise()),
-    (dict(dependencies="{arg_name}"), does_not_raise()),
-    (dict(dependencies=lambda arg: arg.name), does_not_raise()),
-    (dict(dependencies=dict(x='x')), does_not_raise()),
-    (dict(dependencies=['x']), does_not_raise()),
-    (dict(use_names=True), does_not_raise()),
-    (dict(use_names=['x']), does_not_raise()),
-    (dict(auto_provide=True), does_not_raise()),
-    (dict(auto_provide=['x']), does_not_raise()),
-    (dict(dependencies=1), pytest.raises(TypeError, match=".*dependencies.*int.*")),
-    (dict(use_names=1), pytest.raises(TypeError, match=".*use_names.*int.*")),
-    (dict(auto_provide=1), pytest.raises(TypeError, match=".*auto_provide.*int.*")),
+    pytest.param(kwargs, expectation, id=str(kwargs))
+    for kwargs, expectation in [
+        (dict(), DoesNotRaise()),
+        (dict(dependencies="{arg_name}"), DoesNotRaise()),
+        (dict(dependencies=lambda arg: arg.name), DoesNotRaise()),
+        (dict(dependencies=dict(x='x')), DoesNotRaise()),
+        (dict(dependencies=['x']), DoesNotRaise()),
+        (dict(use_names=True), DoesNotRaise()),
+        (dict(use_names=['x']), DoesNotRaise()),
+        (dict(auto_provide=True), DoesNotRaise()),
+        (dict(dependencies=1),
+         pytest.raises(TypeError, match=".*dependencies.*int.*")),
+        (dict(use_names=1),
+         pytest.raises(TypeError, match=".*use_names.*int.*")),
+        (dict(use_names=[1]),
+         pytest.raises(TypeError, match=".*use_names.*")),
+        (dict(auto_provide=1),
+         pytest.raises(TypeError, match=".*auto_provide.*int.*")),
+        (dict(auto_provide=['x']),
+         pytest.raises(TypeError, match=".*auto_provide.*x.*")),
+    ]
 ])
 def test_validate_injection(kwargs, expectation):
+    with expectation:
+        @inject(**kwargs)
+        def f(x: Service):
+            pass
+
     with expectation:
         validate_injection(**kwargs)
 
@@ -754,10 +770,7 @@ def test_strict_validation(injected_method_with, injector, expectation, kwargs, 
                      id="dependencies"),
         pytest.param(pytest.raises(ValueError, match=".*self.*"),
                      dict(use_names=('self',)),
-                     id="use_names"),
-        pytest.param(pytest.raises(ValueError, match=".*self.*"),
-                     dict(auto_provide=('self',)),
-                     id="auto_provide"),
+                     id="use_names")
     ]
 )
 def test_cannot_inject_self(injector, expectation, kwargs):

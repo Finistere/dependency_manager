@@ -1,9 +1,9 @@
 import threading
 from collections import deque
 from contextlib import contextmanager
-from typing import (Callable, Deque, Dict, Hashable, Iterator, List,
-                    Mapping, Optional, Sequence, Tuple, Type, TYPE_CHECKING)
-from weakref import ref, ReferenceType
+from typing import (Callable, Deque, Dict, Hashable, Iterator, List, Mapping, Optional,
+                    Sequence, TYPE_CHECKING, Tuple, Type)
+from weakref import ReferenceType, ref
 
 from .exceptions import (DependencyCycleError, DependencyInstantiationError,
                          DependencyNotFoundError, DuplicateDependencyError,
@@ -494,9 +494,9 @@ class OverridableRawContainer(RawContainer):
                 del self.__singletons_override[dependency]
             except KeyError:
                 pass
-            for scope in self.__scopes_override:
+            for scope_dependencies in self.__scopes_override.values():
                 try:
-                    del scope[dependency]
+                    del scope_dependencies[dependency]
                 except KeyError:
                     pass
             self.__factory_overrides[dependency] = (factory, scope)

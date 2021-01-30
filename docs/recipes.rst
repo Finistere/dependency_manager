@@ -20,12 +20,17 @@ as a service or one that can be provided by a factory.
 .. testcode:: recipes_interface_implementation
 
     from antidote import implementation, Service, inject, Get
-    from typing_extensions import Annotated
+    from typing import Annotated
+    # from typing_extensions import Annotated # Python < 3.9
 
     class Database:
         def __init__(self, host: str, name: str):
             self.host = host
             self.name = name
+
+        @classmethod
+        def with_conf(cls, host: str, name: str):
+            return cls._with_kwargs(host=host, name=name)
 
     class PostgresDB(Service, Database):
         pass
@@ -40,7 +45,7 @@ as a service or one that can be provided by a factory.
         db, host, name = conn_str.split(':')
         if db == 'postgres':
             # Complex dependencies are supported
-            return PostgresDB.with_kwargs(host=host, name=name)
+            return PostgresDB.with_conf(host, name)
         elif db == 'mysql':
             # But you can also simply return the class
             return MySQLDB

@@ -1,8 +1,8 @@
 import inspect
-from typing import cast, Dict, Hashable, Optional
+from typing import Dict, Hashable, Optional, cast
 
 from .._internal import API
-from .._internal.utils import debug_repr, FinalImmutable
+from .._internal.utils import FinalImmutable, debug_repr
 from ..core import Container, DependencyDebug, DependencyValue, Provider, Scope
 
 

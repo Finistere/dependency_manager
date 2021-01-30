@@ -114,12 +114,12 @@ def test_validation(wire, kwargs, expectation):
 def test_iterable():
     w = Wiring(methods=iter(['method']),
                use_names=iter(['method']),
-               auto_provide=iter(['method']))
+               auto_provide=iter([Service]))
 
     assert isinstance(w.methods, frozenset)
     assert w.methods == {'method'}
     assert isinstance(w.auto_provide, frozenset)
-    assert w.auto_provide == {'method'}
+    assert w.auto_provide == {Service}
     assert isinstance(w.use_names, frozenset)
     assert w.use_names == {'method'}
 

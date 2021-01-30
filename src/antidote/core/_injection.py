@@ -130,7 +130,10 @@ def _build_from_dependencies(arguments: Arguments,
                                                         arg.type_hint_with_extras))
                              for arg in arguments.without_self}
     elif isinstance(dependencies, c_abc.Mapping):
-        _check_valid_arg_names(dependencies.keys(), arguments, strict_validation)
+        _check_valid_arg_names("dependencies",
+                               dependencies.keys(),
+                               arguments,
+                               strict_validation)
         arg_to_dependency = dependencies
     elif isinstance(dependencies, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
@@ -165,7 +168,7 @@ def _build_auto_provide(arguments: Arguments,
         # convert to Tuple in case we cannot iterate more than once.
         auto_provide = set(auto_provide)
         for cls in auto_provide:
-            if not isinstance(cls, type) and inspect.isclass(cls):
+            if not (isinstance(cls, type) and inspect.isclass(cls)):
                 raise TypeError(f"auto_provide must be a boolean or an iterable of "
                                 f"classes, but contains {cls!r} which is not a class.")
     else:
@@ -201,7 +204,7 @@ def _build_from_arg_names(arguments: Arguments,
     elif isinstance(use_names, c_abc.Iterable):
         # convert to Tuple in case we cannot iterate more than once.
         use_names = tuple(use_names)
-        _check_valid_arg_names(use_names, arguments, strict_validation)
+        _check_valid_arg_names("use_names", use_names, arguments, strict_validation)
         return set(use_names)
     else:
         raise TypeError(f'Only an iterable or a boolean is supported for '
@@ -209,16 +212,17 @@ def _build_from_arg_names(arguments: Arguments,
 
 
 @API.private
-def _check_valid_arg_names(names: Iterable[str],
+def _check_valid_arg_names(param: str,
+                           names: Iterable[str],
                            arguments: Arguments,
                            strict_validation: bool) -> None:
     for name in names:
         if not isinstance(name, str):
-            raise TypeError(f"Expected argument name (str), "
-                            f"not {name!r}")
+            raise TypeError(f"{param} expected an argument name (str), "
+                            f"not {name!r} ({type(name)})")
         if arguments.has_self and name == arguments[0].name:
-            raise ValueError(f"Cannot inject first argument "
+            raise ValueError(f"Cannot inject first argument in {param} "
                              f"({arguments[0]!r}) of a method / @classmethod.")
 
         if strict_validation and name not in arguments:
-            raise ValueError(f"Unknown argument {name!r}")
+            raise ValueError(f"Unknown argument in {param}: {name!r}")

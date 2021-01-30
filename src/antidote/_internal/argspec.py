@@ -1,6 +1,5 @@
 import inspect
-from typing import (Callable, Iterator, List, Sequence, Set, Union, Any,
-                    Dict)
+from typing import (Any, Callable, Dict, Iterator, List, Sequence, Set, Union)
 
 from .utils import FinalImmutable
 from .._compatibility.typing import get_type_hints

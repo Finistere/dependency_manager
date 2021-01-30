@@ -2,11 +2,13 @@
 # Ignoring F811 for multiple definitions
 
 def test_readme_simple():
+    import sys
     from antidote import (inject, Service, Constants, const, world, Provide,
                           Get, auto_provide)
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    if sys.version_info < (3, 9):
+        from typing_extensions import Annotated  # Python <= 3.8
+    else:
+        from typing import Annotated  # Python 3.9+
 
     class Conf(Constants):
         DB_HOST = const[str]('host')
@@ -71,11 +73,14 @@ def test_readme():
     to retrieve the best movies. In our case the implementation uses IMDB
     to dot it.
     """
+    import sys
+
     from antidote import (Constants, factory, inject, world, const, Service,
                           implementation, ProvideArgName, Get, From)
-    from typing_extensions import Annotated
-    # Or for Python 3.9+
-    # from typing import Annotated
+    if sys.version_info < (3, 9):
+        from typing_extensions import Annotated  # Python <= 3.8
+    else:
+        from typing import Annotated  # Python 3.9+
 
     class MovieDB:
         """ Interface """

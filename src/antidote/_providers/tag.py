@@ -1,11 +1,11 @@
 import threading
-from typing import (Dict, Generic, Hashable, Iterable, Iterator, List,
-                    Optional, Sequence, TypeVar, Set, cast)
+from typing import (Dict, Generic, Hashable, Iterable, Iterator, List, Optional, Sequence,
+                    Set, TypeVar, cast)
 
 from .._compatibility.typing import final
 from .._internal import API
 from .._internal.utils import debug_repr, short_id
-from .._internal.utils.immutable import ImmutableGenericMeta, FinalImmutable, Immutable
+from .._internal.utils.immutable import FinalImmutable, Immutable, ImmutableGenericMeta
 from ..core import Container, DependencyDebug, DependencyValue, Provider
 from ..core.exceptions import AntidoteError
 

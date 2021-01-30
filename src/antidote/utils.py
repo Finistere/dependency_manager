@@ -1,6 +1,5 @@
 import collections.abc as c_abc
-import inspect
-from typing import Iterable, Optional, Tuple, Hashable
+from typing import Iterable, Optional, Tuple
 
 from ._internal import API
 from .core import Scope

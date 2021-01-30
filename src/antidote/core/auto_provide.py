@@ -1,8 +1,6 @@
-import inspect
 from typing import (Any, Callable, Iterable, TypeVar, Union, overload)
 
 from .injection import DEPENDENCIES_TYPE, inject
-from .wiring import wire
 from .._internal import API
 
 F = TypeVar('F', bound=Callable[..., Any])
@@ -44,8 +42,15 @@ def auto_provide(__func: AnyF = None,
                  use_names: Union[bool, Iterable[str]] = None) -> AnyF:
     """
     Wrapper of :py:func:`.inject` with :code:`auto_provide=True` by default. Meaning
-    that it'll try to inject dependencies based on the type hints contrary to
-    :py:func:`.inject` where everything must be explicitly specified.
+    that arguments having a class type hints will be automatically injected if possible,
+    contrary to :py:func:`.inject` where everything must be explicitly specified. It also
+    supports :code:`use_names` and :code:`dependencies` which are passed to
+    :py:func:`.inject`.
+
+    .. note::
+
+        The only goal of this function is to provide syntactic sugar for those that
+        wnat to use :code:`auto_provide=True` everywhere.
 
 
     .. doctest:: core_inject
@@ -62,25 +67,13 @@ def auto_provide(__func: AnyF = None,
         ...     pass  # a = world.get(MyService)
 
     Args:
-        func: Callable to be wrapped. Can also be used on static methods or class methods.
-        dependencies: Explicit definition of the dependencies which overrides
-            :code:`use_names` and :code:`auto_provide`. Defaults to :py:obj:`None`.
-            Can be one of:
-
-            - Mapping from argument name to its dependency
-            - Sequence of dependencies which will be mapped with the position
-              of the arguments. :py:obj:`None` can be used as a placeholder.
-            - Callable which receives :py:class:`~.Arg` as arguments and should
-              return the matching dependency. :py:obj:`None` should be used for
-              arguments without dependency.
-            - String which must have :code:`{arg_name}` as format parameter
-        use_names: Whether or not the arguments' name should be used as their
-            respective dependency. An iterable of argument names may also be
-            supplied to activate this feature only for those. Defaults to :code:`False`.
+        __func: Callable to be wrapped. Can also be used on static methods or
+            class methods.
+        dependencies: Passed on to :py:func:`.inject`.
+        use_names: Passed on to :py:func:`.inject`.
 
     Returns:
-        The decorator to be applied or the injected function if the
-        argument :code:`func` was supplied.
+        Function decorator or the injected function if the :code:`__func` was supplied.
     """
 
     if __func is None:  # For Mypy
